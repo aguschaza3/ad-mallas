@@ -187,6 +187,10 @@ function checklistCompleted(well) {
   return Object.values(well.checklist).every(Boolean);
 }
 
+function operationalChecklistCompleted(well) {
+  return Object.values(well.operational_checklist).every(Boolean);
+}
+
 function renderCandidatoDetailView() {
   const well = state.wells.find((w) => w.id === state.selectedWellId);
   const container = document.getElementById('view-candidato-detalle');
@@ -297,7 +301,7 @@ function renderValidadasDetailView() {
     <div class="detail-top">
       <div class="card detail-title-row">
         <div class="detail-title">${well.id}</div>
-Ho      </div>
+      </div>
       <div class="card approval-controls">
         <label>Aprobación operativa</label>
         <label><input type="radio" name="opApproval" value="si" ${well.operational_approval === true ? 'checked' : ''}/> SI</label>
@@ -344,6 +348,7 @@ Ho      </div>
   });
 
   container.querySelectorAll('input[name="opApproval"]').forEach((input) => {
+    input.disabled = !operationalChecklistCompleted(well);
     input.addEventListener('change', async () => {
       await saveWell(well.id, { operational_approval: input.value === 'si' });
     });
