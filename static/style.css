@@ -229,7 +229,9 @@ tr.clickable:hover {
 
 .detail-grid {
   grid-template-columns: 1.2fr 1fr;
-  min-height: calc(100vh - 340px);
+  min-height: 0;
+  height: 100%;
+  flex: 1;
   align-items: stretch;
 }
 
@@ -238,6 +240,12 @@ tr.clickable:hover {
   grid-template-rows: auto 1fr;
   gap: 16px;
   align-content: stretch;
+}
+
+.view.detail-view:not(.hidden) {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .table-block {
@@ -316,7 +324,8 @@ tr.clickable:hover {
 .mandrel-item {
   display: block;
   font-size: 18px;
-  margin-bottom: 6px;
+  margin: 0;
+  line-height: 1.35;
   color: var(--panel-dark);
 }
 
@@ -324,6 +333,8 @@ tr.clickable:hover {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
+  justify-content: flex-start;
+  gap: 10px;
 }
 
 .approval-controls label,
@@ -338,6 +349,10 @@ tr.clickable:hover {
   display: block;
   margin-bottom: 10px;
   margin-right: 0;
+}
+
+.detail-grid .card h3 {
+  margin: 0 0 10px;
 }
 
 .empty-row td {
