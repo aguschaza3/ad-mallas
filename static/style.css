@@ -235,7 +235,7 @@ tr.clickable:hover {
   align-items: stretch;
 }
 
-.detail-grid > div {
+.detail-grid > div:not(.checklist-card) {
   display: grid;
   grid-template-rows: auto 1fr;
   gap: 16px;
@@ -246,6 +246,10 @@ tr.clickable:hover {
   display: flex;
   flex-direction: column;
   min-height: 0;
+}
+
+.detail-grid > .checklist-card {
+  align-content: flex-start;
 }
 
 .table-block {
