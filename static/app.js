@@ -297,7 +297,7 @@ function renderValidadasDetailView() {
     <div class="detail-top">
       <div class="card detail-title-row">
         <div class="detail-title">${well.id}</div>
-      </div>
+Ho      </div>
       <div class="card approval-controls">
         <label>Aprobación operativa</label>
         <label><input type="radio" name="opApproval" value="si" ${well.operational_approval === true ? 'checked' : ''}/> SI</label>
