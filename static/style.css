@@ -66,6 +66,7 @@ body {
 
 .main-panel {
   padding-right: 6px;
+  min-height: calc(100vh - 48px);
 }
 
 .page-header {
@@ -86,6 +87,7 @@ body {
 
 .view {
   display: block;
+  min-height: calc(100vh - 180px);
 }
 
 .hidden {
@@ -96,7 +98,8 @@ body {
   display: grid;
   grid-template-columns: minmax(260px, 28%) 1fr;
   gap: 16px;
-  align-items: start;
+  align-items: stretch;
+  min-height: calc(100vh - 220px);
 }
 
 .card {
@@ -192,6 +195,7 @@ tr.clickable:hover {
 
 .detail-grid {
   grid-template-columns: 1.2fr 1fr;
+  min-height: calc(100vh - 340px);
 }
 
 .detail-grid > div {
@@ -201,7 +205,7 @@ tr.clickable:hover {
 }
 
 .table-block {
-  min-height: 430px;
+  min-height: 100%;
 }
 
 .approval-controls,
@@ -295,10 +299,15 @@ input[type='radio'] {
     padding: 14px;
   }
 
+  .view {
+    min-height: auto;
+  }
+
   .layout-list,
   .detail-top,
   .detail-grid {
     grid-template-columns: 1fr;
+    min-height: auto;
   }
 
   .filter-block h3,

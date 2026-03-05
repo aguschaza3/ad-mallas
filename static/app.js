@@ -6,12 +6,19 @@ const state = {
 
 const reasons = ['Ranking IWTT', 'Polímeros', 'Geles', 'Estudio', 'Proyecto Especial'];
 
+const technicalChecklistLabels = {
+  productores_asociados: 'Productores Asociados',
+  mallas_vecinas: 'Mallas Vecinas',
+  historia_inyeccion: 'Historia Inyección',
+  chequear_dp_dp: 'Chequear Dp DP',
+  efectivizacion: 'Efectivización',
+};
+
 const operationalChecklistLabels = {
   estado_pozo: 'Estado de pozo',
   integridad_superficie: 'Integridad de instalación de superficie',
   integridad_fondo: 'Integridad de instalación de fondo',
   perdidas_pkrs: 'Pérdidas de PKRS',
-  viabilidad_trazado: 'Viabilidad de trazar',
 };
 
 function defaultOperationalChecklist() {
@@ -20,7 +27,6 @@ function defaultOperationalChecklist() {
     integridad_superficie: false,
     integridad_fondo: false,
     perdidas_pkrs: false,
-    viabilidad_trazado: false,
   };
 }
 
@@ -37,10 +43,10 @@ function normalizeWell(well) {
 
   normalized.operational_approval = normalized.operational_approval ?? null;
   normalized.operational_observations = normalized.operational_observations || '';
-  normalized.operational_checklist = {
-    ...defaultOperationalChecklist(),
-    ...(normalized.operational_checklist || {}),
-  };
+  const opChecklist = normalized.operational_checklist || {};
+  normalized.operational_checklist = Object.fromEntries(
+    Object.keys(defaultOperationalChecklist()).map((key) => [key, Boolean(opChecklist[key])]),
+  );
 
   if (!Array.isArray(normalized.validated_mandrels)) {
     normalized.validated_mandrels = normalized.mandrels
@@ -217,7 +223,7 @@ function renderCandidatoDetailView() {
         ${Object.entries(well.checklist).map(([key, value]) => `
           <label class="checklist-item">
             <input type="checkbox" data-check="${key}" ${value ? 'checked' : ''}/>
-            ${key.replaceAll('_', ' ')}
+            ${technicalChecklistLabels[key] || key.replaceAll('_', ' ')}
           </label>
         `).join('')}
       </div>
@@ -312,10 +318,10 @@ function renderValidadasDetailView() {
     <div class="detail-grid">
       <div class="card">
         <h3>Check list de revisión Operativa de pozo</h3>
-        ${Object.entries(well.operational_checklist).map(([key, value]) => `
+        ${Object.keys(defaultOperationalChecklist()).map((key) => `
           <label class="checklist-item">
-            <input type="checkbox" data-op-check="${key}" ${value ? 'checked' : ''}/>
-            ${operationalChecklistLabels[key] || key.replaceAll('_', ' ')}
+            <input type="checkbox" data-op-check="${key}" ${well.operational_checklist[key] ? 'checked' : ''}/>
+            ${operationalChecklistLabels[key]}
           </label>
         `).join('')}
       </div>
