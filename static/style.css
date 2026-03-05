@@ -96,6 +96,7 @@ body {
   display: grid;
   grid-template-columns: minmax(260px, 28%) 1fr;
   gap: 16px;
+  align-items: start;
 }
 
 .card {
@@ -185,12 +186,27 @@ tr.clickable:hover {
 }
 
 .detail-top {
-  grid-template-columns: 1.1fr 1fr;
+  grid-template-columns: 1.2fr 1fr;
   margin-bottom: 16px;
 }
 
 .detail-grid {
   grid-template-columns: 1.2fr 1fr;
+}
+
+.detail-grid > div {
+  display: grid;
+  gap: 16px;
+  align-content: start;
+}
+
+.table-block {
+  min-height: 430px;
+}
+
+.approval-controls,
+.reason-select {
+  min-height: 94px;
 }
 
 .detail-title-row {

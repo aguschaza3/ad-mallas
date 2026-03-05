@@ -379,7 +379,13 @@ async function saveWell(id, payload) {
     const merged = {
       ...previous,
       ...response,
+      ...(payload.checklist && Object.values(payload.checklist).includes(false)
+        ? { technical_approval: null, reason: null }
+        : {}),
       ...(payload.operational_checklist ? { operational_checklist: payload.operational_checklist } : {}),
+      ...(payload.operational_checklist && Object.values(payload.operational_checklist).includes(false)
+        ? { operational_approval: null }
+        : {}),
       ...(payload.validated_mandrels ? { validated_mandrels: payload.validated_mandrels } : {}),
       ...(payload.operational_observations !== undefined ? { operational_observations: payload.operational_observations } : {}),
       ...(payload.operational_approval !== undefined ? { operational_approval: payload.operational_approval } : {}),
