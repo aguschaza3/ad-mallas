@@ -2,7 +2,10 @@ const state = {
   wells: [],
   selectedWellId: null,
   activeTab: 'candidatos',
+  listPage: { cand: 1, val: 1, cro: 1 },
 };
+
+const PAGE_SIZE = 25;
 
 const reasons = ['Ranking IWTT', 'Polímeros', 'Geles', 'Estudio', 'Proyecto Especial'];
 
@@ -78,17 +81,28 @@ async function loadWells() {
 function setTab(tab) {
   state.activeTab = tab;
   state.selectedWellId = null;
+  state.listPage.cand = 1;
+  state.listPage.val = 1;
+  state.listPage.cro = 1;
   render();
 }
 
-function filteredWells(prefix) {
+function sourceForMode(mode) {
+  if (mode === 'validadas') {
+    return state.wells.filter((w) => w.technical_approval !== null);
+  }
+  if (mode === 'cronograma') {
+    return state.wells.filter((w) => w.operational_approval === true);
+  }
+  return state.wells;
+}
+
+function filteredWells(prefix, mode = 'candidatos') {
   const search = document.getElementById(`${prefix}SearchWell`)?.value?.toLowerCase() || '';
   const field = document.getElementById(`${prefix}FieldFilter`)?.value || '';
   const block = document.getElementById(`${prefix}BlockFilter`)?.value || '';
 
-  const candidates = state.activeTab === 'validadas'
-    ? state.wells.filter((w) => w.technical_approval !== null)
-    : state.wells;
+  const candidates = sourceForMode(mode);
 
   return candidates.filter((w) =>
     w.id.toLowerCase().includes(search)
@@ -97,10 +111,10 @@ function filteredWells(prefix) {
   );
 }
 
-function tableRows(rows, mode = 'candidatos') {
-  if (mode === 'validadas') {
+function tableRows(rows, mode = 'candidatos', rowClickable = true) {
+  if (mode === 'validadas' || mode === 'cronograma') {
     return rows.map((w) => `
-      <tr class="clickable" data-id="${w.id}">
+      <tr class="${rowClickable ? 'clickable' : ''}" data-id="${w.id}">
         <td>${w.id}</td>
         <td>${w.ranking}</td>
         <td>${w.technical_approval ? 'SI' : 'NO'}${w.reason ? ` (${w.reason})` : ''}</td>
@@ -110,7 +124,7 @@ function tableRows(rows, mode = 'candidatos') {
   }
 
   return rows.map((w) => `
-    <tr class="clickable" data-id="${w.id}">
+    <tr class="${rowClickable ? 'clickable' : ''}" data-id="${w.id}">
       <td>${w.id}</td>
       <td>${w.ranking}</td>
       <td>${w.block_ranking}</td>
@@ -120,30 +134,69 @@ function tableRows(rows, mode = 'candidatos') {
   `).join('');
 }
 
-function bindListEvents(prefix, mode = 'candidatos') {
+function bindListEvents(prefix, mode = 'candidatos', rowClickable = true) {
   const populate = () => {
-    const rows = filteredWells(prefix);
+    const allRows = filteredWells(prefix, mode);
     const tbody = document.getElementById(`${prefix}WellsBody`);
-    tbody.innerHTML = tableRows(rows, mode);
+    const totalPages = Math.max(1, Math.ceil(allRows.length / PAGE_SIZE));
+    state.listPage[prefix] = Math.min(state.listPage[prefix] || 1, totalPages);
 
-    tbody.querySelectorAll('tr').forEach((tr) => {
-      tr.addEventListener('click', () => {
-        state.selectedWellId = tr.dataset.id;
-        render();
+    const start = (state.listPage[prefix] - 1) * PAGE_SIZE;
+    const end = start + PAGE_SIZE;
+    const pageRows = allRows.slice(start, end);
+
+    tbody.innerHTML = tableRows(pageRows, mode, rowClickable);
+
+    const pagerInfo = document.getElementById(`${prefix}PagerInfo`);
+    const prevBtn = document.getElementById(`${prefix}PrevPage`);
+    const nextBtn = document.getElementById(`${prefix}NextPage`);
+
+    if (pagerInfo) {
+      const base = `Página ${state.listPage[prefix]} de ${totalPages}`;
+      pagerInfo.textContent = allRows.length
+        ? `${base} · Mostrando ${start + 1}-${Math.min(end, allRows.length)} de ${allRows.length} pozos`
+        : 'Sin resultados';
+    }
+
+    if (prevBtn) prevBtn.disabled = state.listPage[prefix] <= 1;
+    if (nextBtn) nextBtn.disabled = state.listPage[prefix] >= totalPages;
+
+    if (rowClickable) {
+      tbody.querySelectorAll('tr').forEach((tr) => {
+        tr.addEventListener('click', () => {
+          state.selectedWellId = tr.dataset.id;
+          render();
+        });
       });
-    });
+    }
   };
 
-  document.getElementById(`${prefix}FieldFilter`).addEventListener('change', populate);
-  document.getElementById(`${prefix}BlockFilter`).addEventListener('change', populate);
-  document.getElementById(`${prefix}SearchWell`).addEventListener('input', populate);
+  const resetAndPopulate = () => {
+    state.listPage[prefix] = 1;
+    populate();
+  };
+
+  document.getElementById(`${prefix}FieldFilter`).addEventListener('change', resetAndPopulate);
+  document.getElementById(`${prefix}BlockFilter`).addEventListener('change', resetAndPopulate);
+  document.getElementById(`${prefix}SearchWell`).addEventListener('input', resetAndPopulate);
+
+  document.getElementById(`${prefix}PrevPage`).addEventListener('click', () => {
+    if ((state.listPage[prefix] || 1) > 1) {
+      state.listPage[prefix] -= 1;
+      populate();
+    }
+  });
+
+  document.getElementById(`${prefix}NextPage`).addEventListener('click', () => {
+    state.listPage[prefix] += 1;
+    populate();
+  });
+
   populate();
 }
 
 function listLayoutTemplate(prefix, title, columns, mode = 'candidatos') {
-  const source = mode === 'validadas'
-    ? state.wells.filter((w) => w.technical_approval !== null)
-    : state.wells;
+  const source = sourceForMode(mode);
   const fields = [...new Set(source.map((w) => w.field))];
   const blocks = [...new Set(source.map((w) => w.block))];
 
@@ -160,7 +213,7 @@ function listLayoutTemplate(prefix, title, columns, mode = 'candidatos') {
           ${blocks.map((b) => `<option>${b}</option>`).join('')}
         </select>
       </div>
-      <div>
+      <div class="list-main">
         <input class="search" id="${prefix}SearchWell" placeholder="Buscar Pozo" />
         <div class="card table-block">
           <h3>${title}</h3>
@@ -172,6 +225,13 @@ function listLayoutTemplate(prefix, title, columns, mode = 'candidatos') {
             </thead>
             <tbody id="${prefix}WellsBody"></tbody>
           </table>
+          <div class="table-footer">
+            <span id="${prefix}PagerInfo" class="pager-info"></span>
+            <div class="pager-controls">
+              <button id="${prefix}PrevPage" class="pager-btn" type="button">Anterior</button>
+              <button id="${prefix}NextPage" class="pager-btn" type="button">Siguiente</button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -187,6 +247,17 @@ function renderCandidatosListView() {
     'candidatos',
   );
   bindListEvents('cand', 'candidatos');
+}
+
+function renderCronogramaListView() {
+  const container = document.getElementById('view-cronograma-lista');
+  container.innerHTML = listLayoutTemplate(
+    'cro',
+    'Oportunidades Listas para Cronograma',
+    ['Inyector', 'Ranking', 'Aprobación Técnica (Motivo)', 'Aprobación Operativa'],
+    'cronograma',
+  );
+  bindListEvents('cro', 'cronograma', false);
 }
 
 function checklistCompleted(well) {
@@ -421,9 +492,10 @@ function render() {
   const candidatoDetailView = document.getElementById('view-candidato-detalle');
   const validadasListView = document.getElementById('view-validadas-lista');
   const validadasDetailView = document.getElementById('view-validadas-detalle');
+  const cronogramaListView = document.getElementById('view-cronograma-lista');
   const emptyView = document.getElementById('view-empty');
 
-  [candidatosListView, candidatoDetailView, validadasListView, validadasDetailView, emptyView]
+  [candidatosListView, candidatoDetailView, validadasListView, validadasDetailView, cronogramaListView, emptyView]
     .forEach((el) => el.classList.add('hidden'));
 
   if (state.activeTab === 'candidatos') {
@@ -459,6 +531,13 @@ function render() {
       validadasListView.classList.remove('hidden');
       renderValidadasListView();
     }
+    return;
+  }
+
+  if (state.activeTab === 'cronograma') {
+    header.textContent = 'Gestión Oportunidades Listas IWTT';
+    cronogramaListView.classList.remove('hidden');
+    renderCronogramaListView();
     return;
   }
 
