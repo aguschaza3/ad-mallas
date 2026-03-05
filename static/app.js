@@ -5,7 +5,7 @@ const state = {
   listPage: { cand: 1, val: 1, cro: 1 },
 };
 
-const PAGE_SIZE = 25;
+const MAX_PAGE_SIZE = 25;
 
 const reasons = ['Ranking IWTT', 'Polímeros', 'Geles', 'Estudio', 'Proyecto Especial'];
 
@@ -134,25 +134,46 @@ function tableRows(rows, mode = 'candidatos', rowClickable = true) {
   `).join('');
 }
 
+function currentPageSize(prefix) {
+  const tbody = document.getElementById(`${prefix}WellsBody`);
+  if (!tbody) {
+    return MAX_PAGE_SIZE;
+  }
+
+  const tableBlock = tbody.closest('.table-block');
+  const title = tableBlock?.querySelector('h3');
+  const footer = tableBlock?.querySelector('.table-footer');
+  const thead = tableBlock?.querySelector('thead');
+
+  if (!tableBlock || !title || !footer || !thead) {
+    return MAX_PAGE_SIZE;
+  }
+
+  const rowHeightVar = getComputedStyle(document.documentElement).getPropertyValue('--table-row-height');
+  const rowHeight = Number.parseFloat(rowHeightVar) || 36;
+  const availableHeight = tableBlock.clientHeight - title.offsetHeight - footer.offsetHeight - thead.offsetHeight - 30;
+  const visibleRows = Math.floor(availableHeight / rowHeight);
+
+  return Math.max(3, Math.min(MAX_PAGE_SIZE, visibleRows));
+}
+
 function bindListEvents(prefix, mode = 'candidatos', rowClickable = true) {
   const populate = () => {
     const allRows = filteredWells(prefix, mode);
     const tbody = document.getElementById(`${prefix}WellsBody`);
-    const totalPages = Math.max(1, Math.ceil(allRows.length / PAGE_SIZE));
+    const pageSize = currentPageSize(prefix);
+    const totalPages = Math.max(1, Math.ceil(allRows.length / pageSize));
     state.listPage[prefix] = Math.min(state.listPage[prefix] || 1, totalPages);
 
-    const start = (state.listPage[prefix] - 1) * PAGE_SIZE;
-    const end = start + PAGE_SIZE;
+    const start = (state.listPage[prefix] - 1) * pageSize;
+    const end = start + pageSize;
     const pageRows = allRows.slice(start, end);
     const rowsHtml = tableRows(pageRows, mode, rowClickable);
-    const emptyRowsCount = Math.max(0, PAGE_SIZE - pageRows.length);
+    const columnsCount = tbody.closest('table')?.querySelectorAll('thead th').length || 1;
+    const emptyRowsCount = Math.max(0, pageSize - pageRows.length);
     const emptyRowsHtml = Array.from({ length: emptyRowsCount }, () => `
       <tr class="empty-row">
-        <td>&nbsp;</td>
-        <td>&nbsp;</td>
-        <td>&nbsp;</td>
-        <td>&nbsp;</td>
-        <td>&nbsp;</td>
+        ${Array.from({ length: columnsCount }, () => '<td>&nbsp;</td>').join('')}
       </tr>
     `).join('');
 
@@ -558,6 +579,13 @@ function render() {
 
 document.querySelectorAll('.nav-btn').forEach((btn) => {
   btn.addEventListener('click', () => setTab(btn.dataset.tab));
+});
+
+window.addEventListener('resize', () => {
+  if (state.selectedWellId) {
+    return;
+  }
+  render();
 });
 
 loadWells();

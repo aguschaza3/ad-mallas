@@ -1,4 +1,5 @@
 :root {
+  --table-row-height: 36px;
   --panel: #1d6489;
   --panel-dark: #10304b;
   --border: #0d2740;
@@ -13,6 +14,12 @@
   box-sizing: border-box;
 }
 
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+}
+
 body {
   margin: 0;
   font-family: 'Segoe UI', Arial, Helvetica, sans-serif;
@@ -21,13 +28,15 @@ body {
 }
 
 .app-bg {
-  min-height: calc(100vh - 48px);
+  height: 100vh;
+  min-height: 100vh;
   align-items: stretch;
   background: radial-gradient(circle at top, #eaf2f9 5%, #d2e2f0 45%, #c4d7e8 100%);
   display: grid;
   grid-template-columns: 260px 1fr;
   gap: 24px;
-  padding: 24px;
+  padding: 18px;
+  overflow: hidden;
 }
 
 .sidebar {
@@ -69,9 +78,10 @@ body {
 
 .main-panel {
   padding-right: 6px;
-  min-height: 100%;
+  min-height: 0;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 
@@ -93,8 +103,10 @@ body {
 
 .view {
   display: block;
-  min-height: calc(100vh - 180px);
+  min-height: 0;
+  height: 100%;
   flex: 1;
+  overflow: hidden;
 }
 
 
@@ -107,7 +119,8 @@ body {
   grid-template-columns: minmax(280px, 30%) 1fr;
   gap: 16px;
   align-items: stretch;
-  min-height: calc(100vh - 220px);
+  min-height: 0;
+  height: 100%;
 }
 
 .card {
@@ -165,7 +178,7 @@ body {
 .list-main {
   display: grid;
   grid-template-rows: auto 1fr;
-  min-height: 100%;
+  min-height: 0;
 }
 
 table {
@@ -181,9 +194,9 @@ table {
 th,
 td {
   border-bottom: 1px solid #d9e3ec;
-  padding: 8px 10px;
+  padding: 6px 10px;
   text-align: left;
-  height: 40px;
+  height: var(--table-row-height);
 }
 
 th {
@@ -228,7 +241,8 @@ tr.clickable:hover {
 }
 
 .table-block {
-  min-height: 100%;
+  min-height: 0;
+  height: 100%;
   display: flex;
   flex-direction: column;
 }
@@ -371,6 +385,9 @@ input[type='radio'] {
   .app-bg {
     grid-template-columns: 1fr;
     padding: 14px;
+    height: auto;
+    min-height: 100vh;
+    overflow: auto;
   }
 
   .sidebar {
