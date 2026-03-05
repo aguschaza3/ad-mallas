@@ -73,12 +73,15 @@ body {
   color: var(--panel-dark);
   border: 1px solid rgba(16, 48, 75, 0.25);
   border-radius: 16px;
-  text-align: left;
   font-size: 34px;
   font-weight: 700;
   padding: 18px 22px;
   margin-bottom: 18px;
   box-shadow: 0 6px 18px rgba(13, 39, 64, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .view {
@@ -219,17 +222,17 @@ tr.clickable:hover {
   color: var(--panel-dark);
 }
 
-#backButton {
+
+#headerBackButton {
   padding: 9px 14px;
   border-radius: 9px;
   border: 1px solid rgba(13, 39, 64, 0.2);
   background: #fff;
   color: var(--panel-dark);
   cursor: pointer;
-  margin-bottom: 10px;
 }
 
-#backButton:hover {
+#headerBackButton:hover {
   border-color: rgba(16, 48, 75, 0.4);
 }
 

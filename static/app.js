@@ -45,7 +45,7 @@ function normalizeWell(well) {
   if (!Array.isArray(normalized.validated_mandrels)) {
     normalized.validated_mandrels = normalized.mandrels
       .filter((m) => m.selected)
-      .map((m) => ({ name: m.name, selected: true }));
+      .map((m) => ({ name: m.name, selected: false }));
   }
 
   return normalized;
@@ -199,7 +199,6 @@ function renderCandidatoDetailView() {
     <div class="detail-top">
       <div class="card detail-title-row">
         <div class="detail-title">${well.id}</div>
-        <button id="backButton">Volver</button>
       </div>
       <div class="card approval-controls">
         <label>Aprobación técnica</label>
@@ -239,10 +238,6 @@ function renderCandidatoDetailView() {
     </div>
   `;
 
-  document.getElementById('backButton').addEventListener('click', () => {
-    state.selectedWellId = null;
-    render();
-  });
 
   container.querySelectorAll('input[data-check]').forEach((input) => {
     input.addEventListener('change', async () => {
@@ -295,15 +290,14 @@ function renderValidadasDetailView() {
 
   const availableMandrels = well.mandrels.filter((m) => m.selected);
   if (!well.validated_mandrels?.length && availableMandrels.length) {
-    well.validated_mandrels = availableMandrels.map((m) => ({ name: m.name, selected: true }));
+    well.validated_mandrels = availableMandrels.map((m) => ({ name: m.name, selected: false }));
   }
 
   container.innerHTML = `
     <div class="detail-top">
       <div class="card detail-title-row">
         <div class="detail-title">${well.id}</div>
-        <button id="backButton">Volver</button>
-      </div>
+Ho      </div>
       <div class="card approval-controls">
         <label>Aprobación operativa</label>
         <label><input type="radio" name="opApproval" value="si" ${well.operational_approval === true ? 'checked' : ''}/> SI</label>
@@ -341,10 +335,6 @@ function renderValidadasDetailView() {
     </div>
   `;
 
-  document.getElementById('backButton').addEventListener('click', () => {
-    state.selectedWellId = null;
-    render();
-  });
 
   container.querySelectorAll('input[data-op-check]').forEach((input) => {
     input.addEventListener('change', async () => {
@@ -375,10 +365,22 @@ function renderValidadasDetailView() {
 
 async function saveWell(id, payload) {
   try {
-    const updated = normalizeWell(await api(`/api/wells/${id}`, {
+    const previous = state.wells.find((w) => w.id === id) || {};
+    const response = await api(`/api/wells/${id}`, {
       method: 'PUT',
       body: JSON.stringify(payload),
-    }));
+    });
+
+    const merged = {
+      ...previous,
+      ...response,
+      ...(payload.operational_checklist ? { operational_checklist: payload.operational_checklist } : {}),
+      ...(payload.validated_mandrels ? { validated_mandrels: payload.validated_mandrels } : {}),
+      ...(payload.operational_observations !== undefined ? { operational_observations: payload.operational_observations } : {}),
+      ...(payload.operational_approval !== undefined ? { operational_approval: payload.operational_approval } : {}),
+    };
+
+    const updated = normalizeWell(merged);
     state.wells = state.wells.map((w) => (w.id === id ? updated : w));
     render();
   } catch (err) {
@@ -393,6 +395,10 @@ function render() {
   });
 
   const header = document.getElementById('headerTitle');
+  const headerBackButton = document.getElementById('headerBackButton');
+
+  headerBackButton.classList.add('hidden');
+  headerBackButton.onclick = null;
 
   const candidatosListView = document.getElementById('view-candidatos-lista');
   const candidatoDetailView = document.getElementById('view-candidato-detalle');
@@ -406,6 +412,11 @@ function render() {
   if (state.activeTab === 'candidatos') {
     if (state.selectedWellId) {
       header.textContent = 'Gestión Oportunidades IWTT - Pozo';
+      headerBackButton.classList.remove('hidden');
+      headerBackButton.onclick = () => {
+        state.selectedWellId = null;
+        render();
+      };
       candidatoDetailView.classList.remove('hidden');
       renderCandidatoDetailView();
     } else {
@@ -419,6 +430,11 @@ function render() {
   if (state.activeTab === 'validadas') {
     if (state.selectedWellId) {
       header.textContent = 'Gestión Oportunidades Validadas IWTT - Pozo';
+      headerBackButton.classList.remove('hidden');
+      headerBackButton.onclick = () => {
+        state.selectedWellId = null;
+        render();
+      };
       validadasDetailView.classList.remove('hidden');
       renderValidadasDetailView();
     } else {
