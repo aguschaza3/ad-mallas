@@ -144,8 +144,19 @@ function bindListEvents(prefix, mode = 'candidatos', rowClickable = true) {
     const start = (state.listPage[prefix] - 1) * PAGE_SIZE;
     const end = start + PAGE_SIZE;
     const pageRows = allRows.slice(start, end);
+    const rowsHtml = tableRows(pageRows, mode, rowClickable);
+    const emptyRowsCount = Math.max(0, PAGE_SIZE - pageRows.length);
+    const emptyRowsHtml = Array.from({ length: emptyRowsCount }, () => `
+      <tr class="empty-row">
+        <td>&nbsp;</td>
+        <td>&nbsp;</td>
+        <td>&nbsp;</td>
+        <td>&nbsp;</td>
+        <td>&nbsp;</td>
+      </tr>
+    `).join('');
 
-    tbody.innerHTML = tableRows(pageRows, mode, rowClickable);
+    tbody.innerHTML = rowsHtml + emptyRowsHtml;
 
     const pagerInfo = document.getElementById(`${prefix}PagerInfo`);
     const prevBtn = document.getElementById(`${prefix}PrevPage`);
@@ -162,7 +173,7 @@ function bindListEvents(prefix, mode = 'candidatos', rowClickable = true) {
     if (nextBtn) nextBtn.disabled = state.listPage[prefix] >= totalPages;
 
     if (rowClickable) {
-      tbody.querySelectorAll('tr').forEach((tr) => {
+      tbody.querySelectorAll('tr[data-id]').forEach((tr) => {
         tr.addEventListener('click', () => {
           state.selectedWellId = tr.dataset.id;
           render();
@@ -289,7 +300,7 @@ function renderCandidatoDetailView() {
     </div>
 
     <div class="detail-grid">
-      <div class="card">
+      <div class="card checklist-card">
         <h3>Check list de revisión de pozo (A nivel Capa)</h3>
         ${Object.entries(well.checklist).map(([key, value]) => `
           <label class="checklist-item">
@@ -387,7 +398,7 @@ function renderValidadasDetailView() {
     </div>
 
     <div class="detail-grid">
-      <div class="card">
+      <div class="card checklist-card">
         <h3>Check list de revisión Operativa de pozo</h3>
         ${Object.keys(defaultOperationalChecklist()).map((key) => `
           <label class="checklist-item">
