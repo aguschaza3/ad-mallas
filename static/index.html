@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Gestión Oportunidades IWTT</title>
+    <link rel="stylesheet" href="/static/style.css" />
+  </head>
+  <body>
+    <div class="app-bg">
+      <aside class="sidebar">
+        <button class="nav-btn active" data-tab="candidatos">Candidatos</button>
+        <button class="nav-btn" data-tab="validadas">Oportunidades Validadas</button>
+        <button class="nav-btn" data-tab="cronograma">Pozos listos para Cronograma</button>
+      </aside>
+
+      <main class="main-panel">
+        <header class="page-header" id="headerTitle">Gestión Oportunidades IWTT</header>
+
+        <section id="view-candidatos-lista" class="view"></section>
+
+        <section id="view-candidato-detalle" class="view hidden"></section>
+
+        <section id="view-empty" class="view hidden">
+          <div class="card centered-text">Por ahora esta pestaña está vacía.</div>
+        </section>
+      </main>
+    </div>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>

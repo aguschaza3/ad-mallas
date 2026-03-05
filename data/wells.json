@@ -1,0 +1,83 @@
+[
+  {
+    "id": "POZO-101",
+    "injector": "I-101",
+    "ranking": 1,
+    "block_ranking": "A1",
+    "field": "Loma Alta",
+    "block": "Norte",
+    "technical_approval": true,
+    "reason": "Ranking IWTT",
+    "checklist": {
+      "productores_asociados": true,
+      "mallas_vecinas": true,
+      "historia_inyeccion": true,
+      "chequear_dp_dp": true,
+      "efectivizacion": true
+    },
+    "mandrels": [
+      {
+        "name": "Mandril M-01",
+        "selected": true
+      },
+      {
+        "name": "Mandril M-02",
+        "selected": false
+      }
+    ]
+  },
+  {
+    "id": "POZO-205",
+    "injector": "I-205",
+    "ranking": 2,
+    "block_ranking": "B3",
+    "field": "Loma Alta",
+    "block": "Sur",
+    "technical_approval": null,
+    "reason": null,
+    "checklist": {
+      "productores_asociados": false,
+      "mallas_vecinas": false,
+      "historia_inyeccion": false,
+      "chequear_dp_dp": false,
+      "efectivizacion": false
+    },
+    "mandrels": [
+      {
+        "name": "Mandril M-07",
+        "selected": false
+      },
+      {
+        "name": "Mandril M-08",
+        "selected": true
+      }
+    ]
+  },
+  {
+    "id": "POZO-303",
+    "injector": "I-303",
+    "ranking": 3,
+    "block_ranking": "C2",
+    "field": "El Prado",
+    "block": "Centro",
+    "technical_approval": null,
+    "reason": null,
+    "checklist": {
+      "productores_asociados": false,
+      "mallas_vecinas": false,
+      "historia_inyeccion": false,
+      "chequear_dp_dp": false,
+      "efectivizacion": false
+    },
+    "mandrels": [
+      {
+        "name": "Mandril M-12",
+        "selected": false
+      },
+      {
+        "name": "Mandril M-13",
+        "selected": false
+      }
+    ]
+  }
+]
