@@ -94,6 +94,10 @@ class WellUpdate(BaseModel):
     reason: str | None = None
     checklist: dict[str, bool] | None = None
     mandrels: list[dict[str, Any]] | None = None
+    operational_approval: bool | None = None
+    operational_checklist: dict[str, bool] | None = None
+    operational_observations: str | None = None
+    validated_mandrels: list[dict[str, Any]] | None = None
 
 
 class Storage:
@@ -173,6 +177,9 @@ def update_well(well_id: str, payload: WellUpdate) -> dict[str, Any]:
 
     if payload.checklist is not None:
         well["checklist"] = payload.checklist
+        if not all(well["checklist"].values()):
+            well["technical_approval"] = None
+            well["reason"] = None
 
     if payload.mandrels is not None:
         well["mandrels"] = payload.mandrels
@@ -195,6 +202,31 @@ def update_well(well_id: str, payload: WellUpdate) -> dict[str, Any]:
                 detail="Solo se puede elegir motivo cuando la aprobación técnica es SI.",
             )
         well["reason"] = payload.reason
+
+    if payload.operational_approval is not None:
+        if well.get("technical_approval") is None:
+            raise HTTPException(
+                status_code=400,
+                detail="Solo se puede cargar aprobación operativa para pozos validados técnicamente.",
+            )
+        operational_checklist = well.get("operational_checklist") or {}
+        if operational_checklist and not all(operational_checklist.values()):
+            raise HTTPException(
+                status_code=400,
+                detail="No se puede aprobar operativamente hasta completar el checklist operativo.",
+            )
+        well["operational_approval"] = payload.operational_approval
+
+    if payload.operational_checklist is not None:
+        well["operational_checklist"] = payload.operational_checklist
+        if not all(well["operational_checklist"].values()):
+            well["operational_approval"] = None
+
+    if payload.operational_observations is not None:
+        well["operational_observations"] = payload.operational_observations
+
+    if payload.validated_mandrels is not None:
+        well["validated_mandrels"] = payload.validated_mandrels
 
     wells[index] = well
     storage.save(wells)
