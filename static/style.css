@@ -40,40 +40,43 @@ body {
 }
 
 .sidebar {
-  background: linear-gradient(180deg, #2f6f96 0%, #255b7f 100%);
-  border: 1px solid rgba(13, 39, 64, 0.35);
+  background: linear-gradient(180deg, #346f94 0%, #2a5e83 55%, #234f6f 100%);
+  border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: 22px;
-  padding: 96px 16px 26px;
+  padding: 28px 14px 22px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  box-shadow: 0 8px 24px rgba(14, 40, 61, 0.2);
+  gap: 10px;
+  box-shadow: 0 14px 28px rgba(10, 29, 46, 0.32);
   min-height: 100%;
 }
 
 
 .nav-btn {
-  background: rgba(255, 255, 255, 0.22);
-  color: #f2f8ff;
-  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0.14) 100%);
+  color: #eef6ff;
+  border: 1px solid rgba(255, 255, 255, 0.3);
   border-radius: 12px;
-  font-size: 18px;
+  font-size: 19px;
   font-weight: 600;
   text-align: center;
-  padding: 12px 14px;
+  padding: 14px 12px;
   cursor: pointer;
-  transition: transform 0.15s ease, background 0.2s ease;
+  letter-spacing: 0.01em;
+  transition: transform 0.15s ease, background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .nav-btn:hover {
   transform: translateY(-1px);
-  background: rgba(255, 255, 255, 0.28);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.3) 0%, rgba(255, 255, 255, 0.2) 100%);
+  border-color: rgba(255, 255, 255, 0.44);
 }
 
 .nav-btn.active {
-  background: var(--orange);
+  background: linear-gradient(180deg, #eb7d3b 0%, #d56524 100%);
   border-color: rgba(255, 255, 255, 0.45);
   color: #fff;
+  box-shadow: 0 6px 16px rgba(15, 38, 59, 0.28);
 }
 
 .main-panel {

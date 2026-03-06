@@ -30,7 +30,7 @@ DUMMY_WELLS = [
         "block_ranking": "A1",
         "field": "Loma Alta",
         "block": "Norte",
-        "technical_approval": None,
+        "technical_approval": False,
         "reason": None,
         "checklist": {
             "productores_asociados": False,
@@ -51,7 +51,7 @@ DUMMY_WELLS = [
         "block_ranking": "B3",
         "field": "Loma Alta",
         "block": "Sur",
-        "technical_approval": None,
+        "technical_approval": False,
         "reason": None,
         "checklist": {
             "productores_asociados": True,
@@ -72,7 +72,7 @@ DUMMY_WELLS = [
         "block_ranking": "C2",
         "field": "El Prado",
         "block": "Centro",
-        "technical_approval": None,
+        "technical_approval": False,
         "reason": None,
         "checklist": {
             "productores_asociados": True,
@@ -178,19 +178,20 @@ def update_well(well_id: str, payload: WellUpdate) -> dict[str, Any]:
     if payload.checklist is not None:
         well["checklist"] = payload.checklist
         if not all(well["checklist"].values()):
-            well["technical_approval"] = None
+            well["technical_approval"] = False
             well["reason"] = None
 
     if payload.mandrels is not None:
         well["mandrels"] = payload.mandrels
 
     if payload.technical_approval is not None:
-        checklist_completed = all(well["checklist"].values())
-        if not checklist_completed:
-            raise HTTPException(
-                status_code=400,
-                detail="No se puede aprobar técnicamente hasta completar el checklist.",
-            )
+        if payload.technical_approval is True:
+            checklist_completed = all(well["checklist"].values())
+            if not checklist_completed:
+                raise HTTPException(
+                    status_code=400,
+                    detail="No se puede aprobar técnicamente hasta completar el checklist.",
+                )
         well["technical_approval"] = payload.technical_approval
         if not payload.technical_approval:
             well["reason"] = None
@@ -204,23 +205,24 @@ def update_well(well_id: str, payload: WellUpdate) -> dict[str, Any]:
         well["reason"] = payload.reason
 
     if payload.operational_approval is not None:
-        if well.get("technical_approval") is None:
-            raise HTTPException(
-                status_code=400,
-                detail="Solo se puede cargar aprobación operativa para pozos validados técnicamente.",
-            )
-        operational_checklist = well.get("operational_checklist") or {}
-        if operational_checklist and not all(operational_checklist.values()):
-            raise HTTPException(
-                status_code=400,
-                detail="No se puede aprobar operativamente hasta completar el checklist operativo.",
-            )
+        if payload.operational_approval is True:
+            if well.get("technical_approval") is not True:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Solo se puede cargar aprobación operativa para pozos validados técnicamente.",
+                )
+            operational_checklist = well.get("operational_checklist") or {}
+            if operational_checklist and not all(operational_checklist.values()):
+                raise HTTPException(
+                    status_code=400,
+                    detail="No se puede aprobar operativamente hasta completar el checklist operativo.",
+                )
         well["operational_approval"] = payload.operational_approval
 
     if payload.operational_checklist is not None:
         well["operational_checklist"] = payload.operational_checklist
         if not all(well["operational_checklist"].values()):
-            well["operational_approval"] = None
+            well["operational_approval"] = False
 
     if payload.operational_observations is not None:
         well["operational_observations"] = payload.operational_observations
