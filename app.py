@@ -30,7 +30,7 @@ DUMMY_WELLS = [
         "block_ranking": "A1",
         "field": "Loma Alta",
         "block": "Norte",
-        "technical_approval": None,
+        "technical_approval": False,
         "reason": None,
         "checklist": {
             "productores_asociados": False,
@@ -51,7 +51,7 @@ DUMMY_WELLS = [
         "block_ranking": "B3",
         "field": "Loma Alta",
         "block": "Sur",
-        "technical_approval": None,
+        "technical_approval": False,
         "reason": None,
         "checklist": {
             "productores_asociados": True,
@@ -72,7 +72,7 @@ DUMMY_WELLS = [
         "block_ranking": "C2",
         "field": "El Prado",
         "block": "Centro",
-        "technical_approval": None,
+        "technical_approval": False,
         "reason": None,
         "checklist": {
             "productores_asociados": True,
