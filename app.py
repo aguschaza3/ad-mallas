@@ -177,9 +177,8 @@ def update_well(well_id: str, payload: WellUpdate) -> dict[str, Any]:
 
     if payload.checklist is not None:
         well["checklist"] = payload.checklist
-        if not all(well["checklist"].values()):
-            well["technical_approval"] = None
-            well["reason"] = None
+        well["technical_approval"] = None
+        well["reason"] = None
 
     if payload.mandrels is not None:
         well["mandrels"] = payload.mandrels
@@ -220,8 +219,7 @@ def update_well(well_id: str, payload: WellUpdate) -> dict[str, Any]:
 
     if payload.operational_checklist is not None:
         well["operational_checklist"] = payload.operational_checklist
-        if not all(well["operational_checklist"].values()):
-            well["operational_approval"] = None
+        well["operational_approval"] = None
 
     if payload.operational_observations is not None:
         well["operational_observations"] = payload.operational_observations

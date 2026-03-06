@@ -129,7 +129,7 @@ function tableRows(rows, mode = 'candidatos', rowClickable = true) {
       <tr class="${rowClickable ? 'clickable' : ''}" data-id="${w.id}">
         <td>${w.id}</td>
         <td>${w.ranking}</td>
-        <td>${w.technical_approval ? 'SI' : 'NO'}${w.reason ? ` (${w.reason})` : ''}</td>
+        <td>${w.technical_approval === null ? '-' : (w.technical_approval ? 'SI' : 'NO')}${w.reason ? ` (${w.reason})` : ''}</td>
         <td>${w.operational_approval === null ? '-' : (w.operational_approval ? 'SI' : 'NO')}</td>
       </tr>
     `).join('');
@@ -508,13 +508,9 @@ async function saveWell(id, payload) {
     const merged = {
       ...previous,
       ...response,
-      ...(payload.checklist && Object.values(payload.checklist).includes(false)
-        ? { technical_approval: null, reason: null }
-        : {}),
+      ...(payload.checklist ? { technical_approval: null, reason: null } : {}),
       ...(payload.operational_checklist ? { operational_checklist: payload.operational_checklist } : {}),
-      ...(payload.operational_checklist && Object.values(payload.operational_checklist).includes(false)
-        ? { operational_approval: null }
-        : {}),
+      ...(payload.operational_checklist ? { operational_approval: null } : {}),
       ...(payload.validated_mandrels ? { validated_mandrels: payload.validated_mandrels } : {}),
       ...(payload.operational_observations !== undefined ? { operational_observations: payload.operational_observations } : {}),
       ...(payload.operational_approval !== undefined ? { operational_approval: payload.operational_approval } : {}),
