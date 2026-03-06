@@ -17,6 +17,16 @@ const technicalChecklistLabels = {
   efectivizacion: 'Efectivización',
 };
 
+function defaultTechnicalChecklist() {
+  return {
+    productores_asociados: false,
+    mallas_vecinas: false,
+    historia_inyeccion: false,
+    chequear_dp_dp: false,
+    efectivizacion: false,
+  };
+}
+
 const operationalChecklistLabels = {
   estado_pozo: 'Estado de pozo',
   integridad_superficie: 'Integridad de instalación de superficie',
@@ -36,9 +46,10 @@ function defaultOperationalChecklist() {
 function normalizeWell(well) {
   const normalized = { ...well };
 
-  if (!normalized.checklist) {
-    normalized.checklist = {};
-  }
+  const technicalChecklist = normalized.checklist || {};
+  normalized.checklist = Object.fromEntries(
+    Object.keys(defaultTechnicalChecklist()).map((key) => [key, Boolean(technicalChecklist[key])]),
+  );
 
   if (!Array.isArray(normalized.mandrels)) {
     normalized.mandrels = [];
@@ -294,11 +305,13 @@ function renderCronogramaListView() {
 }
 
 function checklistCompleted(well) {
-  return Object.values(well.checklist).every(Boolean);
+  const values = Object.values(well.checklist || {});
+  return values.length > 0 && values.every(Boolean);
 }
 
 function operationalChecklistCompleted(well) {
-  return Object.values(well.operational_checklist).every(Boolean);
+  const values = Object.values(well.operational_checklist || {});
+  return values.length > 0 && values.every(Boolean);
 }
 
 function renderCandidatoDetailView() {

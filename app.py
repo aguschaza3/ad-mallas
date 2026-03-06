@@ -186,7 +186,8 @@ def update_well(well_id: str, payload: WellUpdate) -> dict[str, Any]:
 
     if payload.technical_approval is not None:
         if payload.technical_approval is True:
-            checklist_completed = all(well["checklist"].values())
+            checklist_values = list((well.get("checklist") or {}).values())
+            checklist_completed = bool(checklist_values) and all(checklist_values)
             if not checklist_completed:
                 raise HTTPException(
                     status_code=400,
@@ -211,8 +212,8 @@ def update_well(well_id: str, payload: WellUpdate) -> dict[str, Any]:
                     status_code=400,
                     detail="Solo se puede cargar aprobación operativa para pozos validados técnicamente.",
                 )
-            operational_checklist = well.get("operational_checklist") or {}
-            if operational_checklist and not all(operational_checklist.values()):
+            operational_checklist_values = list((well.get("operational_checklist") or {}).values())
+            if not operational_checklist_values or not all(operational_checklist_values):
                 raise HTTPException(
                     status_code=400,
                     detail="No se puede aprobar operativamente hasta completar el checklist operativo.",
