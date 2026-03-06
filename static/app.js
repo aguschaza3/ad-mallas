@@ -104,7 +104,7 @@ function sourceForMode(mode) {
     return state.wells.filter((w) => w.technical_approval === true);
   }
   if (mode === 'cronograma') {
-    return state.wells.filter((w) => w.operational_approval === true);
+    return state.wells.filter((w) => w.technical_approval === true && w.operational_approval === true);
   }
   return state.wells;
 }
