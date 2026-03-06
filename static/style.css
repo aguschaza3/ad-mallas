@@ -40,7 +40,7 @@ body {
 }
 
 .sidebar {
-  background: linear-gradient(180deg, #1e6489, #16597f);
+  background: linear-gradient(180deg, #2f6f96 0%, #255b7f 100%);
   border: 1px solid rgba(13, 39, 64, 0.35);
   border-radius: 22px;
   padding: 96px 16px 26px;
