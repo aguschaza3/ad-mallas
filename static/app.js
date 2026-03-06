@@ -55,8 +55,8 @@ function normalizeWell(well) {
     normalized.mandrels = [];
   }
 
-  normalized.technical_approval = normalized.technical_approval ?? false;
-  normalized.operational_approval = normalized.operational_approval ?? false;
+  normalized.technical_approval = normalized.technical_approval ?? null;
+  normalized.operational_approval = normalized.operational_approval ?? null;
   normalized.operational_observations = normalized.operational_observations || '';
   const opChecklist = normalized.operational_checklist || {};
   normalized.operational_checklist = Object.fromEntries(
@@ -130,7 +130,7 @@ function tableRows(rows, mode = 'candidatos', rowClickable = true) {
         <td>${w.id}</td>
         <td>${w.ranking}</td>
         <td>${w.technical_approval ? 'SI' : 'NO'}${w.reason ? ` (${w.reason})` : ''}</td>
-        <td>${w.operational_approval ? 'SI' : 'NO'}</td>
+        <td>${w.operational_approval === null ? '-' : (w.operational_approval ? 'SI' : 'NO')}</td>
       </tr>
     `).join('');
   }
@@ -140,7 +140,7 @@ function tableRows(rows, mode = 'candidatos', rowClickable = true) {
       <td>${w.id}</td>
       <td>${w.ranking}</td>
       <td>${w.block_ranking}</td>
-      <td>${w.technical_approval ? 'SI' : 'NO'}</td>
+      <td>${w.technical_approval === null ? '-' : (w.technical_approval ? 'SI' : 'NO')}</td>
       <td>${w.reason || '-'}</td>
     </tr>
   `).join('');
@@ -314,6 +314,14 @@ function operationalChecklistCompleted(well) {
   return values.length > 0 && values.every(Boolean);
 }
 
+function technicalApprovalLocked(well) {
+  return !checklistCompleted(well);
+}
+
+function operationalApprovalLocked(well) {
+  return !operationalChecklistCompleted(well);
+}
+
 function renderCandidatoDetailView() {
   const well = state.wells.find((w) => w.id === state.selectedWellId);
   const container = document.getElementById('view-candidato-detalle');
@@ -329,8 +337,8 @@ function renderCandidatoDetailView() {
       </div>
       <div class="card approval-controls">
         <label>Aprobación técnica</label>
-        <label><input type="radio" name="approval" value="si" ${well.technical_approval === true ? 'checked' : ''} ${checklistCompleted(well) ? '' : 'disabled'}/> SI</label>
-        <label><input type="radio" name="approval" value="no" ${well.technical_approval !== true ? 'checked' : ''}/> NO</label>
+        <label><input type="radio" name="approval" value="si" ${!technicalApprovalLocked(well) && well.technical_approval === true ? 'checked' : ''} ${technicalApprovalLocked(well) ? 'disabled' : ''}/> SI</label>
+        <label><input type="radio" name="approval" value="no" ${!technicalApprovalLocked(well) && well.technical_approval === false ? 'checked' : ''} ${technicalApprovalLocked(well) ? 'disabled' : ''}/> NO</label>
       </div>
     </div>
 
@@ -426,8 +434,8 @@ function renderValidadasDetailView() {
       </div>
       <div class="card approval-controls">
         <label>Aprobación operativa</label>
-        <label><input type="radio" name="opApproval" value="si" ${well.operational_approval === true ? 'checked' : ''} ${(well.technical_approval === true && operationalChecklistCompleted(well)) ? '' : 'disabled'}/> SI</label>
-        <label><input type="radio" name="opApproval" value="no" ${well.operational_approval !== true ? 'checked' : ''}/> NO</label>
+        <label><input type="radio" name="opApproval" value="si" ${!operationalApprovalLocked(well) && well.operational_approval === true ? 'checked' : ''} ${operationalApprovalLocked(well) ? 'disabled' : ''}/> SI</label>
+        <label><input type="radio" name="opApproval" value="no" ${!operationalApprovalLocked(well) && well.operational_approval === false ? 'checked' : ''} ${operationalApprovalLocked(well) ? 'disabled' : ''}/> NO</label>
       </div>
     </div>
 
@@ -501,11 +509,11 @@ async function saveWell(id, payload) {
       ...previous,
       ...response,
       ...(payload.checklist && Object.values(payload.checklist).includes(false)
-        ? { technical_approval: false, reason: null }
+        ? { technical_approval: null, reason: null }
         : {}),
       ...(payload.operational_checklist ? { operational_checklist: payload.operational_checklist } : {}),
       ...(payload.operational_checklist && Object.values(payload.operational_checklist).includes(false)
-        ? { operational_approval: false }
+        ? { operational_approval: null }
         : {}),
       ...(payload.validated_mandrels ? { validated_mandrels: payload.validated_mandrels } : {}),
       ...(payload.operational_observations !== undefined ? { operational_observations: payload.operational_observations } : {}),
