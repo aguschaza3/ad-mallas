@@ -207,6 +207,7 @@ td {
 }
 
 th {
+  cursor: pointer;
   color: #4f6e87;
   background: #ecf3f9;
   font-size: 13px;

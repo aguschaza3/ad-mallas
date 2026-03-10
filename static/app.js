@@ -333,12 +333,13 @@ function listLayoutTemplate(prefix, title, columns, mode = 'candidatos') {
         <input class="search" id="${prefix}SearchWell" placeholder="Buscar Pozo" />
         <div class="card table-block">
           <h3>${title}</h3>
+          <p class="sort-hint">Click en el encabezado de cada columna para ordenar.</p>
           <table id="${prefix}WellsTable">
             <thead>
               <tr>
                 ${columns.map((column) => {
                   const isActive = sort.key === column.key;
-                  const icon = isActive ? (sort.direction === 'asc' ? '↑' : '↓') : '↕';
+                  const icon = isActive ? (sort.direction === 'asc' ? '▲' : '▼') : '⇅';
                   const activeClass = isActive ? 'is-active' : '';
                   return `<th><button type="button" class="table-sort-btn ${activeClass}" data-sort-key="${column.key}" title="Ordenar por ${column.label}">${column.label} <span aria-hidden="true">${icon}</span></button></th>`;
                 }).join('')}
