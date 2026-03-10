@@ -355,9 +355,6 @@ def update_well(well_id: str, payload: WellUpdate) -> dict[str, Any]:
         raise HTTPException(status_code=404, detail="Pozo no encontrado")
 
     well = wells[index]
-    original_technical_approval = well.get("technical_approval")
-    original_reason = well.get("reason")
-
     if payload.checklist is not None:
         well["checklist"] = payload.checklist
         well["technical_approval"] = None
@@ -398,12 +395,6 @@ def update_well(well_id: str, payload: WellUpdate) -> dict[str, Any]:
 
     if payload.validated_mandrels is not None:
         well["validated_mandrels"] = payload.validated_mandrels
-
-    if payload.checklist is None and payload.technical_approval is None:
-        well["technical_approval"] = original_technical_approval
-
-    if payload.checklist is None and payload.reason is None:
-        well["reason"] = original_reason
 
     wells[index] = well
     storage.save(wells)
