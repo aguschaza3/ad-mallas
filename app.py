@@ -12,6 +12,16 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 try:
+    import pandas as pd
+except ImportError:  # pandas is optional
+    pd = None
+
+try:
+    import pyarrow.parquet as pq
+except ImportError:  # pyarrow is optional
+    pq = None
+
+try:
     import boto3
 except ImportError:  # boto3 is optional
     boto3 = None
@@ -20,7 +30,121 @@ except ImportError:  # boto3 is optional
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "data"
 DATA_FILE = DATA_DIR / "wells.json"
+PARQUET_FILE = DATA_DIR / "ranking_flujograma_rap_iny.parquet"
 
+
+
+
+def default_checklist() -> dict[str, bool]:
+    return {
+        "productores_asociados": False,
+        "mallas_vecinas": False,
+        "historia_inyeccion": False,
+        "chequear_dp_dp": False,
+        "efectivizacion": False,
+    }
+
+
+def default_operational_checklist() -> dict[str, bool]:
+    return {
+        "estado_pozo": False,
+        "integridad_superficie": False,
+        "integridad_fondo": False,
+        "perdidas_pkrs": False,
+    }
+
+
+def _clean_value(value: Any) -> Any:
+    if value is None:
+        return None
+    try:
+        if pd is not None and pd.isna(value):
+            return None
+    except Exception:
+        pass
+    if isinstance(value, str):
+        stripped = value.strip()
+        if not stripped or stripped.lower() in {"nan", "none", "null"}:
+            return None
+        return stripped
+    return value
+
+
+def _pick(row: dict[str, Any], *keys: str) -> Any:
+    for key in keys:
+        if key in row:
+            value = _clean_value(row.get(key))
+            if value is not None:
+                return value
+    return None
+
+
+def _to_int(value: Any, default: int = 0) -> int:
+    value = _clean_value(value)
+    if value is None:
+        return default
+    try:
+        return int(float(value))
+    except (TypeError, ValueError):
+        return default
+
+
+def normalize_well_id(value: Any) -> str:
+    return str(value or "").strip().upper()
+
+
+def build_well_from_row(row: dict[str, Any]) -> dict[str, Any]:
+    injector = _pick(row, "well", "INYECTOR")
+    ranking = _pick(row, "RANKING", "Ranking")
+    block_ranking = _pick(row, "Ranking_Bloque")
+    field = _pick(row, "Yacimiento")
+    block = _pick(row, "Proyecto_Secundaria")
+
+    normalized_id = normalize_well_id(injector)
+
+    return {
+        "id": normalized_id,
+        "injector": normalized_id,
+        "ranking": _to_int(ranking, 0),
+        "block_ranking": str(block_ranking or "-"),
+        "field": str(field or "").strip(),
+        "block": str(block or "").strip(),
+        "technical_approval": None,
+        "reason": None,
+        "checklist": default_checklist(),
+        "mandrels": [],
+        "operational_approval": None,
+        "operational_checklist": default_operational_checklist(),
+        "operational_observations": "",
+        "validated_mandrels": [],
+    }
+
+
+def load_wells_from_parquet(parquet_file: Path) -> list[dict[str, Any]]:
+    if not parquet_file.exists():
+        return []
+
+    rows: list[dict[str, Any]] = []
+    try:
+        if pd is not None:
+            df = pd.read_parquet(parquet_file)
+            rows = df.to_dict(orient="records")
+        elif pq is not None:
+            table = pq.read_table(parquet_file)
+            rows = table.to_pylist()
+        else:
+            return []
+    except Exception:
+        return []
+
+    wells: list[dict[str, Any]] = []
+    for row in rows:
+        well = build_well_from_row(row)
+        if well["id"]:
+            wells.append(well)
+
+    unique: dict[str, dict[str, Any]] = {w["id"]: w for w in wells}
+    return list(unique.values())
 
 DUMMY_WELLS = [
     {
@@ -94,23 +218,82 @@ class WellUpdate(BaseModel):
     reason: str | None = None
     checklist: dict[str, bool] | None = None
     mandrels: list[dict[str, Any]] | None = None
+    operational_approval: bool | None = None
+    operational_checklist: dict[str, bool] | None = None
+    operational_observations: str | None = None
+    validated_mandrels: list[dict[str, Any]] | None = None
 
 
 class Storage:
-    def __init__(self, data_file: Path) -> None:
+    def __init__(self, data_file: Path, parquet_file: Path) -> None:
         self.data_file = data_file
+        self.parquet_file = parquet_file
         self.s3_bucket = os.getenv("S3_BUCKET")
         self.s3_key = os.getenv("S3_KEY", "iwtt/wells.json")
 
+    def _load_json(self) -> list[dict[str, Any]]:
+        if not self.data_file.exists():
+            return []
+        raw = self.data_file.read_text(encoding="utf-8")
+        if not raw.strip():
+            return []
+        try:
+            return json.loads(raw)
+        except json.JSONDecodeError:
+            try:
+                recovered = json.loads(raw, strict=False)
+                self.save(recovered)
+                return recovered
+            except json.JSONDecodeError:
+                backup = self.data_file.with_suffix(".json.broken")
+                try:
+                    self.data_file.replace(backup)
+                except OSError:
+                    pass
+                return []
+
     def _ensure_file(self) -> None:
         DATA_DIR.mkdir(exist_ok=True)
-        if not self.data_file.exists():
-            self.save(DUMMY_WELLS)
+        if self.data_file.exists():
+            return
+        try:
+            parquet_wells = load_wells_from_parquet(self.parquet_file)
+        except Exception:
+            parquet_wells = []
+        self.save(parquet_wells)
+
+    def _merge_with_parquet_base(self, persisted: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        try:
+            parquet_wells = load_wells_from_parquet(self.parquet_file)
+        except Exception:
+            parquet_wells = []
+        if not parquet_wells:
+            return persisted
+
+        persisted_by_id = {normalize_well_id(w.get("id")): w for w in persisted if w.get("id")}
+        merged: list[dict[str, Any]] = []
+        for base in parquet_wells:
+            existing = persisted_by_id.get(normalize_well_id(base["id"]), {})
+            merged.append({
+                **base,
+                "technical_approval": existing.get("technical_approval", base.get("technical_approval")),
+                "reason": existing.get("reason", base.get("reason")),
+                "checklist": existing.get("checklist", base.get("checklist", default_checklist())),
+                "mandrels": existing.get("mandrels", base.get("mandrels", [])),
+                "operational_approval": existing.get("operational_approval", base.get("operational_approval")),
+                "operational_checklist": existing.get("operational_checklist", base.get("operational_checklist", default_operational_checklist())),
+                "operational_observations": existing.get("operational_observations", base.get("operational_observations", "")),
+                "validated_mandrels": existing.get("validated_mandrels", base.get("validated_mandrels", [])),
+            })
+        return merged
 
     def load(self) -> list[dict[str, Any]]:
         self._ensure_file()
-        with self.data_file.open("r", encoding="utf-8") as f:
-            return json.load(f)
+        persisted = self._load_json()
+        merged = self._merge_with_parquet_base(persisted)
+        if merged != persisted:
+            self.save(merged)
+        return merged
 
     def save(self, wells: list[dict[str, Any]]) -> None:
         DATA_DIR.mkdir(exist_ok=True)
@@ -130,7 +313,7 @@ class Storage:
         )
 
 
-storage = Storage(DATA_FILE)
+storage = Storage(DATA_FILE, PARQUET_FILE)
 
 app = FastAPI(title="Gestión Oportunidades IWTT")
 app.add_middleware(
@@ -156,7 +339,8 @@ def list_wells() -> list[dict[str, Any]]:
 @app.get("/api/wells/{well_id}")
 def get_well(well_id: str) -> dict[str, Any]:
     wells = storage.load()
-    well = next((w for w in wells if w["id"] == well_id), None)
+    requested_id = normalize_well_id(well_id)
+    well = next((w for w in wells if normalize_well_id(w.get("id")) == requested_id), None)
     if well is None:
         raise HTTPException(status_code=404, detail="Pozo no encontrado")
     return well
@@ -165,24 +349,27 @@ def get_well(well_id: str) -> dict[str, Any]:
 @app.put("/api/wells/{well_id}")
 def update_well(well_id: str, payload: WellUpdate) -> dict[str, Any]:
     wells = storage.load()
-    index = next((i for i, w in enumerate(wells) if w["id"] == well_id), None)
+    requested_id = normalize_well_id(well_id)
+    index = next((i for i, w in enumerate(wells) if normalize_well_id(w.get("id")) == requested_id), None)
     if index is None:
         raise HTTPException(status_code=404, detail="Pozo no encontrado")
 
     well = wells[index]
-
     if payload.checklist is not None:
         well["checklist"] = payload.checklist
+        well["technical_approval"] = None
+        well["reason"] = None
 
     if payload.mandrels is not None:
         well["mandrels"] = payload.mandrels
 
     if payload.technical_approval is not None:
-        checklist_completed = all(well["checklist"].values())
+        checklist_values = list((well.get("checklist") or {}).values())
+        checklist_completed = bool(checklist_values) and all(checklist_values)
         if not checklist_completed:
             raise HTTPException(
                 status_code=400,
-                detail="No se puede aprobar técnicamente hasta completar el checklist.",
+                detail="Solo se puede definir la aprobación técnica cuando el checklist está completo.",
             )
         well["technical_approval"] = payload.technical_approval
         if not payload.technical_approval:
@@ -195,6 +382,19 @@ def update_well(well_id: str, payload: WellUpdate) -> dict[str, Any]:
                 detail="Solo se puede elegir motivo cuando la aprobación técnica es SI.",
             )
         well["reason"] = payload.reason
+
+    if payload.operational_approval is not None:
+        well["operational_approval"] = payload.operational_approval
+
+    if payload.operational_checklist is not None:
+        well["operational_checklist"] = payload.operational_checklist
+        well["operational_approval"] = None
+
+    if payload.operational_observations is not None:
+        well["operational_observations"] = payload.operational_observations
+
+    if payload.validated_mandrels is not None:
+        well["validated_mandrels"] = payload.validated_mandrels
 
     wells[index] = well
     storage.save(wells)
