@@ -228,8 +228,16 @@ class Storage:
     def _load_json(self) -> list[dict[str, Any]]:
         if not self.data_file.exists():
             return []
-        with self.data_file.open("r", encoding="utf-8") as f:
-            return json.load(f)
+        try:
+            with self.data_file.open("r", encoding="utf-8") as f:
+                return json.load(f)
+        except json.JSONDecodeError:
+            backup = self.data_file.with_suffix(".json.broken")
+            try:
+                self.data_file.replace(backup)
+            except OSError:
+                pass
+            return []
 
     def _ensure_file(self) -> None:
         DATA_DIR.mkdir(exist_ok=True)
