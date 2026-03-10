@@ -228,16 +228,23 @@ class Storage:
     def _load_json(self) -> list[dict[str, Any]]:
         if not self.data_file.exists():
             return []
-        try:
-            with self.data_file.open("r", encoding="utf-8") as f:
-                return json.load(f)
-        except json.JSONDecodeError:
-            backup = self.data_file.with_suffix(".json.broken")
-            try:
-                self.data_file.replace(backup)
-            except OSError:
-                pass
+        raw = self.data_file.read_text(encoding="utf-8")
+        if not raw.strip():
             return []
+        try:
+            return json.loads(raw)
+        except json.JSONDecodeError:
+            try:
+                recovered = json.loads(raw, strict=False)
+                self.save(recovered)
+                return recovered
+            except json.JSONDecodeError:
+                backup = self.data_file.with_suffix(".json.broken")
+                try:
+                    self.data_file.replace(backup)
+                except OSError:
+                    pass
+                return []
 
     def _ensure_file(self) -> None:
         DATA_DIR.mkdir(exist_ok=True)
@@ -247,7 +254,7 @@ class Storage:
             parquet_wells = load_wells_from_parquet(self.parquet_file)
         except Exception:
             parquet_wells = []
-        self.save(parquet_wells or DUMMY_WELLS)
+        self.save(parquet_wells)
 
     def _merge_with_parquet_base(self, persisted: list[dict[str, Any]]) -> list[dict[str, Any]]:
         try:
@@ -278,8 +285,6 @@ class Storage:
         self._ensure_file()
         persisted = self._load_json()
         merged = self._merge_with_parquet_base(persisted)
-        if not merged:
-            merged = DUMMY_WELLS
         if merged != persisted:
             self.save(merged)
         return merged

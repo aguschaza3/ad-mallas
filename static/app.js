@@ -3,6 +3,7 @@ const state = {
   selectedWellId: null,
   activeTab: 'candidatos',
   listPage: { cand: 1, val: 1, cro: 1 },
+  saveSeq: {},
 };
 
 const MAX_PAGE_SIZE = 25;
@@ -498,12 +499,19 @@ function renderValidadasDetailView() {
 }
 
 async function saveWell(id, payload) {
+  const seq = (state.saveSeq[id] || 0) + 1;
+  state.saveSeq[id] = seq;
+
   try {
     const previous = state.wells.find((w) => w.id === id) || {};
     const response = await api(`/api/wells/${id}`, {
       method: 'PUT',
       body: JSON.stringify(payload),
     });
+
+    if (state.saveSeq[id] !== seq) {
+      return;
+    }
 
     const merged = {
       ...previous,
@@ -520,6 +528,9 @@ async function saveWell(id, payload) {
     state.wells = state.wells.map((w) => (w.id === id ? updated : w));
     render();
   } catch (err) {
+    if (state.saveSeq[id] !== seq) {
+      return;
+    }
     alert(err.message);
     await loadWells();
   }
