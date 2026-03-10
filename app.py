@@ -399,8 +399,10 @@ def update_well(well_id: str, payload: WellUpdate) -> dict[str, Any]:
     if payload.validated_mandrels is not None:
         well["validated_mandrels"] = payload.validated_mandrels
 
-    if payload.checklist is None:
+    if payload.checklist is None and payload.technical_approval is None:
         well["technical_approval"] = original_technical_approval
+
+    if payload.checklist is None and payload.reason is None:
         well["reason"] = original_reason
 
     wells[index] = well
