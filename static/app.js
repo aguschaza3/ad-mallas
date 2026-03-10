@@ -2,9 +2,82 @@ const state = {
   wells: [],
   selectedWellId: null,
   activeTab: 'candidatos',
+  listPage: { cand: 1, val: 1, cro: 1 },
+  saveSeq: {},
+  saveTimers: {},
+  listSort: {
+    cand: { key: 'ranking', direction: 'asc' },
+    val: { key: 'ranking', direction: 'asc' },
+    cro: { key: 'ranking', direction: 'asc' },
+  },
 };
 
+const MAX_PAGE_SIZE = 25;
+
 const reasons = ['Ranking IWTT', 'Polímeros', 'Geles', 'Estudio', 'Proyecto Especial'];
+
+const technicalChecklistLabels = {
+  productores_asociados: 'Productores Asociados',
+  mallas_vecinas: 'Mallas Vecinas',
+  historia_inyeccion: 'Historia Inyección',
+  chequear_dp_dp: 'Chequear Dp DP',
+  efectivizacion: 'Efectivización',
+};
+
+function defaultTechnicalChecklist() {
+  return {
+    productores_asociados: false,
+    mallas_vecinas: false,
+    historia_inyeccion: false,
+    chequear_dp_dp: false,
+    efectivizacion: false,
+  };
+}
+
+const operationalChecklistLabels = {
+  estado_pozo: 'Estado de pozo',
+  integridad_superficie: 'Integridad de instalación de superficie',
+  integridad_fondo: 'Integridad de instalación de fondo',
+  perdidas_pkrs: 'Pérdidas de PKRS',
+};
+
+function defaultOperationalChecklist() {
+  return {
+    estado_pozo: false,
+    integridad_superficie: false,
+    integridad_fondo: false,
+    perdidas_pkrs: false,
+  };
+}
+
+function normalizeWell(well) {
+  const normalized = { ...well };
+
+  const technicalChecklist = normalized.checklist || {};
+  normalized.checklist = Object.fromEntries(
+    Object.keys(defaultTechnicalChecklist()).map((key) => [key, Boolean(technicalChecklist[key])]),
+  );
+
+  if (!Array.isArray(normalized.mandrels)) {
+    normalized.mandrels = [];
+  }
+
+  normalized.technical_approval = normalized.technical_approval ?? null;
+  normalized.operational_approval = normalized.operational_approval ?? null;
+  normalized.operational_observations = normalized.operational_observations || '';
+  const opChecklist = normalized.operational_checklist || {};
+  normalized.operational_checklist = Object.fromEntries(
+    Object.keys(defaultOperationalChecklist()).map((key) => [key, Boolean(opChecklist[key])]),
+  );
+
+  if (!Array.isArray(normalized.validated_mandrels)) {
+    normalized.validated_mandrels = normalized.mandrels
+      .filter((m) => m.selected)
+      .map((m) => ({ name: m.name, selected: false }));
+  }
+
+  return normalized;
+}
 
 async function api(path, options = {}) {
   const res = await fetch(path, {
@@ -19,79 +92,107 @@ async function api(path, options = {}) {
 }
 
 async function loadWells() {
-  state.wells = await api('/api/wells');
+  const data = await api('/api/wells');
+  state.wells = data.map(normalizeWell);
   render();
 }
 
 function setTab(tab) {
   state.activeTab = tab;
-  if (tab !== 'candidatos') {
-    state.selectedWellId = null;
-  }
+  state.selectedWellId = null;
+  state.listPage.cand = 1;
+  state.listPage.val = 1;
+  state.listPage.cro = 1;
   render();
 }
 
-function filteredWells() {
-  const search = document.getElementById('searchWell')?.value?.toLowerCase() || '';
-  const field = document.getElementById('fieldFilter')?.value || '';
-  const block = document.getElementById('blockFilter')?.value || '';
-  return state.wells.filter((w) =>
+function sourceForMode(mode) {
+  if (mode === 'validadas') {
+    return state.wells.filter((w) => w.technical_approval === true);
+  }
+  if (mode === 'cronograma') {
+    return state.wells.filter((w) => w.technical_approval === true && w.operational_approval === true);
+  }
+  return state.wells;
+}
+
+function filteredWells(prefix, mode = 'candidatos') {
+  const search = document.getElementById(`${prefix}SearchWell`)?.value?.toLowerCase() || '';
+  const field = document.getElementById(`${prefix}FieldFilter`)?.value || '';
+  const block = document.getElementById(`${prefix}BlockFilter`)?.value || '';
+
+  const candidates = sourceForMode(mode);
+
+  return candidates.filter((w) =>
     w.id.toLowerCase().includes(search)
     && (!field || w.field === field)
     && (!block || w.block === block)
   );
 }
 
-function renderListView() {
-  const fields = [...new Set(state.wells.map((w) => w.field))];
-  const blocks = [...new Set(state.wells.map((w) => w.block))];
-
-  const container = document.getElementById('view-candidatos-lista');
-  container.innerHTML = `
-    <div class="layout-list">
-      <div class="card filter-block">
-        <h3>FILTROS</h3>
-        <select id="fieldFilter" class="select">
-          <option value="">Yacimiento</option>
-          ${fields.map((f) => `<option>${f}</option>`).join('')}
-        </select>
-        <select id="blockFilter" class="select">
-          <option value="">Bloque</option>
-          ${blocks.map((b) => `<option>${b}</option>`).join('')}
-        </select>
-      </div>
-      <div>
-        <input class="search" id="searchWell" placeholder="Buscar Pozo" />
-        <div class="card table-block">
-          <h3>Ranking IWTT</h3>
-          <table>
-            <thead>
-              <tr>
-                <th>Inyector</th>
-                <th>Ranking</th>
-                <th>Ranking bloque</th>
-                <th>Aprobación Técnica</th>
-                <th>Motivo</th>
-              </tr>
-            </thead>
-            <tbody id="wellsBody"></tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  `;
-
-  document.getElementById('fieldFilter').addEventListener('change', populateTable);
-  document.getElementById('blockFilter').addEventListener('change', populateTable);
-  document.getElementById('searchWell').addEventListener('input', populateTable);
-  populateTable();
+function statusValue(value) {
+  if (value === true) return 2;
+  if (value === false) return 1;
+  return 0;
 }
 
-function populateTable() {
-  const rows = filteredWells();
-  const tbody = document.getElementById('wellsBody');
-  tbody.innerHTML = rows.map((w) => `
-    <tr class="clickable" data-id="${w.id}">
+function sortableValue(well, key) {
+  switch (key) {
+    case 'id':
+      return (well.id || '').toLowerCase();
+    case 'ranking':
+      return Number(well.ranking) || 0;
+    case 'block_ranking':
+      return (well.block_ranking || '').toLowerCase();
+    case 'technical_approval':
+      return statusValue(well.technical_approval);
+    case 'operational_approval':
+      return statusValue(well.operational_approval);
+    case 'reason':
+      return (well.reason || '').toLowerCase();
+    default:
+      return '';
+  }
+}
+
+function sortRows(rows, prefix) {
+  const sort = state.listSort[prefix];
+  if (!sort?.key) {
+    return rows;
+  }
+
+  const sorted = [...rows].sort((a, b) => {
+    const aValue = sortableValue(a, sort.key);
+    const bValue = sortableValue(b, sort.key);
+
+    if (aValue === bValue) {
+      return a.id.localeCompare(b.id);
+    }
+
+    if (typeof aValue === 'number' && typeof bValue === 'number') {
+      return aValue - bValue;
+    }
+
+    return String(aValue).localeCompare(String(bValue), 'es');
+  });
+
+  return sort.direction === 'desc' ? sorted.reverse() : sorted;
+}
+
+function tableRows(rows, mode = 'candidatos', rowClickable = true) {
+  if (mode === 'validadas' || mode === 'cronograma') {
+    return rows.map((w) => `
+      <tr class="${rowClickable ? 'clickable' : ''}" data-id="${w.id}">
+        <td>${w.id}</td>
+        <td>${w.ranking}</td>
+        <td>${w.technical_approval === null ? '-' : (w.technical_approval ? 'SI' : 'NO')}${w.reason ? ` (${w.reason})` : ''}</td>
+        <td>${w.operational_approval === null ? '-' : (w.operational_approval ? 'SI' : 'NO')}</td>
+      </tr>
+    `).join('');
+  }
+
+  return rows.map((w) => `
+    <tr class="${rowClickable ? 'clickable' : ''}" data-id="${w.id}">
       <td>${w.id}</td>
       <td>${w.ranking}</td>
       <td>${w.block_ranking}</td>
@@ -99,20 +200,206 @@ function populateTable() {
       <td>${w.reason || '-'}</td>
     </tr>
   `).join('');
+}
 
-  tbody.querySelectorAll('tr').forEach((tr) => {
-    tr.addEventListener('click', () => {
-      state.selectedWellId = tr.dataset.id;
+function currentPageSize(prefix) {
+  const tbody = document.getElementById(`${prefix}WellsBody`);
+  if (!tbody) {
+    return MAX_PAGE_SIZE;
+  }
+
+  const tableBlock = tbody.closest('.table-block');
+  const title = tableBlock?.querySelector('h3');
+  const footer = tableBlock?.querySelector('.table-footer');
+  const thead = tableBlock?.querySelector('thead');
+
+  if (!tableBlock || !title || !footer || !thead) {
+    return MAX_PAGE_SIZE;
+  }
+
+  const rowHeightVar = getComputedStyle(document.documentElement).getPropertyValue('--table-row-height');
+  const rowHeight = Number.parseFloat(rowHeightVar) || 36;
+  const availableHeight = tableBlock.clientHeight - title.offsetHeight - footer.offsetHeight - thead.offsetHeight - 30;
+  const visibleRows = Math.floor(availableHeight / rowHeight);
+
+  return Math.max(3, Math.min(MAX_PAGE_SIZE, visibleRows));
+}
+
+function bindListEvents(prefix, mode = 'candidatos', rowClickable = true) {
+  const populate = () => {
+    const allRows = sortRows(filteredWells(prefix, mode), prefix);
+    const tbody = document.getElementById(`${prefix}WellsBody`);
+    const pageSize = currentPageSize(prefix);
+    const totalPages = Math.max(1, Math.ceil(allRows.length / pageSize));
+    state.listPage[prefix] = Math.min(state.listPage[prefix] || 1, totalPages);
+
+    const start = (state.listPage[prefix] - 1) * pageSize;
+    const end = start + pageSize;
+    const pageRows = allRows.slice(start, end);
+    const rowsHtml = tableRows(pageRows, mode, rowClickable);
+    const columnsCount = tbody.closest('table')?.querySelectorAll('thead th').length || 1;
+    const emptyRowsCount = Math.max(0, pageSize - pageRows.length);
+    const emptyRowsHtml = Array.from({ length: emptyRowsCount }, () => `
+      <tr class="empty-row">
+        ${Array.from({ length: columnsCount }, () => '<td>&nbsp;</td>').join('')}
+      </tr>
+    `).join('');
+
+    tbody.innerHTML = rowsHtml + emptyRowsHtml;
+
+    const pagerInfo = document.getElementById(`${prefix}PagerInfo`);
+    const prevBtn = document.getElementById(`${prefix}PrevPage`);
+    const nextBtn = document.getElementById(`${prefix}NextPage`);
+
+    if (pagerInfo) {
+      const base = `Página ${state.listPage[prefix]} de ${totalPages}`;
+      pagerInfo.textContent = allRows.length
+        ? `${base} · Mostrando ${start + 1}-${Math.min(end, allRows.length)} de ${allRows.length} pozos`
+        : 'Sin resultados';
+    }
+
+    if (prevBtn) prevBtn.disabled = state.listPage[prefix] <= 1;
+    if (nextBtn) nextBtn.disabled = state.listPage[prefix] >= totalPages;
+
+    if (rowClickable) {
+      tbody.querySelectorAll('tr[data-id]').forEach((tr) => {
+        tr.addEventListener('click', () => {
+          state.selectedWellId = tr.dataset.id;
+          render();
+        });
+      });
+    }
+  };
+
+  const resetAndPopulate = () => {
+    state.listPage[prefix] = 1;
+    populate();
+  };
+
+  document.getElementById(`${prefix}FieldFilter`).addEventListener('change', resetAndPopulate);
+  document.getElementById(`${prefix}BlockFilter`).addEventListener('change', resetAndPopulate);
+  document.getElementById(`${prefix}SearchWell`).addEventListener('input', resetAndPopulate);
+
+  document.getElementById(`${prefix}PrevPage`).addEventListener('click', () => {
+    if ((state.listPage[prefix] || 1) > 1) {
+      state.listPage[prefix] -= 1;
+      populate();
+    }
+  });
+
+  document.getElementById(`${prefix}NextPage`).addEventListener('click', () => {
+    state.listPage[prefix] += 1;
+    populate();
+  });
+
+  document.querySelectorAll(`#${prefix}WellsTable [data-sort-key]`).forEach((button) => {
+    button.addEventListener('click', () => {
+      const key = button.dataset.sortKey;
+      const current = state.listSort[prefix];
+      if (current.key === key) {
+        current.direction = current.direction === 'asc' ? 'desc' : 'asc';
+      } else {
+        current.key = key;
+        current.direction = 'asc';
+      }
+      state.listPage[prefix] = 1;
       render();
     });
   });
+
+  populate();
+}
+
+function listLayoutTemplate(prefix, title, columns, mode = 'candidatos') {
+  const source = sourceForMode(mode);
+  const fields = [...new Set(source.map((w) => w.field))];
+  const blocks = [...new Set(source.map((w) => w.block))];
+  const sort = state.listSort[prefix];
+
+  return `
+    <div class="layout-list">
+      <div class="card filter-block">
+        <h3>FILTROS</h3>
+        <select id="${prefix}FieldFilter" class="select">
+          <option value="">Yacimiento</option>
+          ${fields.map((f) => `<option>${f}</option>`).join('')}
+        </select>
+        <select id="${prefix}BlockFilter" class="select">
+          <option value="">Bloque</option>
+          ${blocks.map((b) => `<option>${b}</option>`).join('')}
+        </select>
+      </div>
+      <div class="list-main">
+        <input class="search" id="${prefix}SearchWell" placeholder="Buscar Pozo" />
+        <div class="card table-block">
+          <h3>${title}</h3>
+          <table id="${prefix}WellsTable">
+            <thead>
+              <tr>
+                ${columns.map((column) => {
+                  const isActive = sort.key === column.key;
+                  const icon = isActive ? (sort.direction === 'asc' ? '↑' : '↓') : '↕';
+                  const activeClass = isActive ? 'is-active' : '';
+                  return `<th><button type="button" class="table-sort-btn ${activeClass}" data-sort-key="${column.key}" title="Ordenar por ${column.label}">${column.label} <span aria-hidden="true">${icon}</span></button></th>`;
+                }).join('')}
+              </tr>
+            </thead>
+            <tbody id="${prefix}WellsBody"></tbody>
+          </table>
+          <div class="table-footer">
+            <span id="${prefix}PagerInfo" class="pager-info"></span>
+            <div class="pager-controls">
+              <button id="${prefix}PrevPage" class="pager-btn" type="button">Anterior</button>
+              <button id="${prefix}NextPage" class="pager-btn" type="button">Siguiente</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderCandidatosListView() {
+  const container = document.getElementById('view-candidatos-lista');
+  container.innerHTML = listLayoutTemplate(
+    'cand',
+    'Ranking IWTT',
+    [{ label: 'Inyector', key: 'id' }, { label: 'Ranking', key: 'ranking' }, { label: 'Ranking bloque', key: 'block_ranking' }, { label: 'Aprobación Técnica', key: 'technical_approval' }, { label: 'Motivo', key: 'reason' }],
+    'candidatos',
+  );
+  bindListEvents('cand', 'candidatos');
+}
+
+function renderCronogramaListView() {
+  const container = document.getElementById('view-cronograma-lista');
+  container.innerHTML = listLayoutTemplate(
+    'cro',
+    'Oportunidades Listas para Cronograma',
+    [{ label: 'Inyector', key: 'id' }, { label: 'Ranking', key: 'ranking' }, { label: 'Aprobación Técnica (Motivo)', key: 'technical_approval' }, { label: 'Aprobación Operativa', key: 'operational_approval' }],
+    'cronograma',
+  );
+  bindListEvents('cro', 'cronograma', false);
 }
 
 function checklistCompleted(well) {
-  return Object.values(well.checklist).every(Boolean);
+  const values = Object.values(well.checklist || {});
+  return values.length > 0 && values.every(Boolean);
 }
 
-function renderDetailView() {
+function operationalChecklistCompleted(well) {
+  const values = Object.values(well.operational_checklist || {});
+  return values.length > 0 && values.every(Boolean);
+}
+
+function technicalApprovalLocked(well) {
+  return !checklistCompleted(well);
+}
+
+function operationalApprovalLocked(well) {
+  return !operationalChecklistCompleted(well);
+}
+
+function renderCandidatoDetailView() {
   const well = state.wells.find((w) => w.id === state.selectedWellId);
   const container = document.getElementById('view-candidato-detalle');
   if (!well) {
@@ -121,23 +408,24 @@ function renderDetailView() {
   }
 
   container.innerHTML = `
-    <button id="backButton">Volver</button>
     <div class="detail-top">
-      <div class="card detail-title">${well.id}</div>
+      <div class="card detail-title-row">
+        <div class="detail-title">${well.id}</div>
+      </div>
       <div class="card approval-controls">
         <label>Aprobación técnica</label>
-        <label><input type="radio" name="approval" value="si" ${well.technical_approval === true ? 'checked' : ''}/> SI</label>
-        <label><input type="radio" name="approval" value="no" ${well.technical_approval === false ? 'checked' : ''}/> NO</label>
+        <label><input type="radio" name="approval" value="si" ${!technicalApprovalLocked(well) && well.technical_approval === true ? 'checked' : ''} ${technicalApprovalLocked(well) ? 'disabled' : ''}/> SI</label>
+        <label><input type="radio" name="approval" value="no" ${!technicalApprovalLocked(well) && well.technical_approval === false ? 'checked' : ''} ${technicalApprovalLocked(well) ? 'disabled' : ''}/> NO</label>
       </div>
     </div>
 
     <div class="detail-grid">
-      <div class="card">
+      <div class="card checklist-card">
         <h3>Check list de revisión de pozo (A nivel Capa)</h3>
         ${Object.entries(well.checklist).map(([key, value]) => `
           <label class="checklist-item">
             <input type="checkbox" data-check="${key}" ${value ? 'checked' : ''}/>
-            ${key.replaceAll('_', ' ')}
+            ${technicalChecklistLabels[key] || key.replaceAll('_', ' ')}
           </label>
         `).join('')}
       </div>
@@ -162,15 +450,13 @@ function renderDetailView() {
     </div>
   `;
 
-  document.getElementById('backButton').addEventListener('click', () => {
-    state.selectedWellId = null;
-    render();
-  });
 
   container.querySelectorAll('input[data-check]').forEach((input) => {
-    input.addEventListener('change', async () => {
+    input.addEventListener('change', () => {
       well.checklist[input.dataset.check] = input.checked;
-      await saveWell(well.id, { checklist: well.checklist });
+      scheduleWellSave(well.id, 'technical_checklist', () => ({
+        checklist: { ...well.checklist },
+      }));
     });
   });
 
@@ -183,7 +469,6 @@ function renderDetailView() {
   });
 
   container.querySelectorAll('input[name="approval"]').forEach((input) => {
-    input.disabled = !checklistCompleted(well);
     input.addEventListener('change', async () => {
       await saveWell(well.id, { technical_approval: input.value === 'si' });
     });
@@ -197,15 +482,148 @@ function renderDetailView() {
   });
 }
 
+
+function scheduleWellSave(id, key, payloadFactory, delayMs = 250) {
+  const timerKey = `${id}:${key}`;
+  if (state.saveTimers[timerKey]) {
+    clearTimeout(state.saveTimers[timerKey]);
+  }
+
+  state.saveTimers[timerKey] = setTimeout(async () => {
+    delete state.saveTimers[timerKey];
+    await saveWell(id, payloadFactory());
+  }, delayMs);
+}
+
+function renderValidadasListView() {
+  const container = document.getElementById('view-validadas-lista');
+  container.innerHTML = listLayoutTemplate(
+    'val',
+    'Oportunidades Aprobadas Técnicamente',
+    [{ label: 'Inyector', key: 'id' }, { label: 'Ranking', key: 'ranking' }, { label: 'Aprobación Técnica (Motivo)', key: 'technical_approval' }, { label: 'Aprobación Operativa', key: 'operational_approval' }],
+    'validadas',
+  );
+  bindListEvents('val', 'validadas');
+}
+
+function renderValidadasDetailView() {
+  const well = state.wells.find((w) => w.id === state.selectedWellId);
+  const container = document.getElementById('view-validadas-detalle');
+  if (!well) {
+    container.innerHTML = '';
+    return;
+  }
+
+  const availableMandrels = well.mandrels.filter((m) => m.selected);
+  if (!well.validated_mandrels?.length && availableMandrels.length) {
+    well.validated_mandrels = availableMandrels.map((m) => ({ name: m.name, selected: false }));
+  }
+
+  container.innerHTML = `
+    <div class="detail-top">
+      <div class="card detail-title-row">
+        <div class="detail-title">${well.id}</div>
+      </div>
+      <div class="card approval-controls">
+        <label>Aprobación operativa</label>
+        <label><input type="radio" name="opApproval" value="si" ${!operationalApprovalLocked(well) && well.operational_approval === true ? 'checked' : ''} ${operationalApprovalLocked(well) ? 'disabled' : ''}/> SI</label>
+        <label><input type="radio" name="opApproval" value="no" ${!operationalApprovalLocked(well) && well.operational_approval === false ? 'checked' : ''} ${operationalApprovalLocked(well) ? 'disabled' : ''}/> NO</label>
+      </div>
+    </div>
+
+    <div class="detail-grid">
+      <div class="card checklist-card">
+        <h3>Check list de revisión Operativa de pozo</h3>
+        ${Object.keys(defaultOperationalChecklist()).map((key) => `
+          <label class="checklist-item">
+            <input type="checkbox" data-op-check="${key}" ${well.operational_checklist[key] ? 'checked' : ''}/>
+            ${operationalChecklistLabels[key]}
+          </label>
+        `).join('')}
+      </div>
+      <div>
+        <div class="card reason-select">
+          <label>Observaciones</label>
+          <textarea id="operationalObservation" class="textarea" rows="4" placeholder="Escribí observaciones operativas...">${well.operational_observations || ''}</textarea>
+        </div>
+        <div class="card">
+          <h3>Mandriles a Trazar</h3>
+          ${well.validated_mandrels.length
+            ? well.validated_mandrels.map((m, idx) => `
+              <label class="mandrel-item">
+                <input type="checkbox" data-op-mandrel="${idx}" ${m.selected ? 'checked' : ''}/>
+                ${m.name}
+              </label>
+            `).join('')
+            : '<p class="empty-note">No hay mandriles seleccionados desde Candidatos.</p>'}
+        </div>
+      </div>
+    </div>
+  `;
+
+
+  container.querySelectorAll('input[data-op-check]').forEach((input) => {
+    input.addEventListener('change', () => {
+      well.operational_checklist[input.dataset.opCheck] = input.checked;
+      scheduleWellSave(well.id, 'operational_checklist', () => ({
+        operational_checklist: { ...well.operational_checklist },
+      }));
+    });
+  });
+
+  container.querySelectorAll('input[name="opApproval"]').forEach((input) => {
+    input.addEventListener('change', async () => {
+      await saveWell(well.id, { operational_approval: input.value === 'si' });
+    });
+  });
+
+  container.querySelectorAll('input[data-op-mandrel]').forEach((input) => {
+    input.addEventListener('change', async () => {
+      const idx = Number(input.dataset.opMandrel);
+      well.validated_mandrels[idx].selected = input.checked;
+      await saveWell(well.id, { validated_mandrels: well.validated_mandrels });
+    });
+  });
+
+  const observation = document.getElementById('operationalObservation');
+  observation.addEventListener('change', async () => {
+    await saveWell(well.id, { operational_observations: observation.value });
+  });
+}
+
 async function saveWell(id, payload) {
+  const seq = (state.saveSeq[id] || 0) + 1;
+  state.saveSeq[id] = seq;
+
   try {
-    const updated = await api(`/api/wells/${id}`, {
+    const previous = state.wells.find((w) => w.id === id) || {};
+    const response = await api(`/api/wells/${id}`, {
       method: 'PUT',
       body: JSON.stringify(payload),
     });
+
+    if (state.saveSeq[id] !== seq) {
+      return;
+    }
+
+    const merged = {
+      ...previous,
+      ...response,
+      ...(payload.checklist ? { technical_approval: null, reason: null } : {}),
+      ...(payload.operational_checklist ? { operational_checklist: payload.operational_checklist } : {}),
+      ...(payload.operational_checklist ? { operational_approval: null } : {}),
+      ...(payload.validated_mandrels ? { validated_mandrels: payload.validated_mandrels } : {}),
+      ...(payload.operational_observations !== undefined ? { operational_observations: payload.operational_observations } : {}),
+      ...(payload.operational_approval !== undefined ? { operational_approval: payload.operational_approval } : {}),
+    };
+
+    const updated = normalizeWell(merged);
     state.wells = state.wells.map((w) => (w.id === id ? updated : w));
     render();
   } catch (err) {
+    if (state.saveSeq[id] !== seq) {
+      return;
+    }
     alert(err.message);
     await loadWells();
   }
@@ -217,34 +635,77 @@ function render() {
   });
 
   const header = document.getElementById('headerTitle');
-  const listView = document.getElementById('view-candidatos-lista');
-  const detailView = document.getElementById('view-candidato-detalle');
+  const headerBackButton = document.getElementById('headerBackButton');
+
+  headerBackButton.classList.add('hidden');
+  headerBackButton.onclick = null;
+
+  const candidatosListView = document.getElementById('view-candidatos-lista');
+  const candidatoDetailView = document.getElementById('view-candidato-detalle');
+  const validadasListView = document.getElementById('view-validadas-lista');
+  const validadasDetailView = document.getElementById('view-validadas-detalle');
+  const cronogramaListView = document.getElementById('view-cronograma-lista');
   const emptyView = document.getElementById('view-empty');
 
-  if (state.activeTab !== 'candidatos') {
-    header.textContent = 'Gestión Oportunidades IWTT';
-    listView.classList.add('hidden');
-    detailView.classList.add('hidden');
-    emptyView.classList.remove('hidden');
+  [candidatosListView, candidatoDetailView, validadasListView, validadasDetailView, cronogramaListView, emptyView]
+    .forEach((el) => el.classList.add('hidden'));
+
+  if (state.activeTab === 'candidatos') {
+    if (state.selectedWellId) {
+      header.textContent = 'Gestión Oportunidades IWTT - Pozo';
+      headerBackButton.classList.remove('hidden');
+      headerBackButton.onclick = () => {
+        state.selectedWellId = null;
+        render();
+      };
+      candidatoDetailView.classList.remove('hidden');
+      renderCandidatoDetailView();
+    } else {
+      header.textContent = 'Gestión Oportunidades IWTT';
+      candidatosListView.classList.remove('hidden');
+      renderCandidatosListView();
+    }
     return;
   }
 
-  emptyView.classList.add('hidden');
-  if (state.selectedWellId) {
-    header.textContent = 'Gestión Oportunidades IWTT - Pozo';
-    listView.classList.add('hidden');
-    detailView.classList.remove('hidden');
-    renderDetailView();
-  } else {
-    header.textContent = 'Gestión Oportunidades IWTT';
-    detailView.classList.add('hidden');
-    listView.classList.remove('hidden');
-    renderListView();
+  if (state.activeTab === 'validadas') {
+    if (state.selectedWellId) {
+      header.textContent = 'Gestión Oportunidades Validadas IWTT - Pozo';
+      headerBackButton.classList.remove('hidden');
+      headerBackButton.onclick = () => {
+        state.selectedWellId = null;
+        render();
+      };
+      validadasDetailView.classList.remove('hidden');
+      renderValidadasDetailView();
+    } else {
+      header.textContent = 'Gestión Oportunidades Validadas IWTT';
+      validadasListView.classList.remove('hidden');
+      renderValidadasListView();
+    }
+    return;
   }
+
+  if (state.activeTab === 'cronograma') {
+    header.textContent = 'Gestión Oportunidades Listas IWTT';
+    cronogramaListView.classList.remove('hidden');
+    renderCronogramaListView();
+    return;
+  }
+
+  header.textContent = 'Gestión Oportunidades IWTT';
+  emptyView.classList.remove('hidden');
 }
 
 document.querySelectorAll('.nav-btn').forEach((btn) => {
   btn.addEventListener('click', () => setTab(btn.dataset.tab));
+});
+
+window.addEventListener('resize', () => {
+  if (state.selectedWellId) {
+    return;
+  }
+  render();
 });
 
 loadWells();
