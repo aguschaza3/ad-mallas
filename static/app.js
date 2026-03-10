@@ -617,6 +617,10 @@ async function saveWell(id, payload) {
       ...(payload.validated_mandrels ? { validated_mandrels: payload.validated_mandrels } : {}),
       ...(payload.operational_observations !== undefined ? { operational_observations: payload.operational_observations } : {}),
       ...(payload.operational_approval !== undefined ? { operational_approval: payload.operational_approval } : {}),
+      ...(payload.checklist === undefined ? {
+        technical_approval: response.technical_approval ?? previous.technical_approval,
+        reason: response.reason ?? previous.reason,
+      } : {}),
     };
 
     const updated = normalizeWell(merged);
