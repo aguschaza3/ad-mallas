@@ -12,6 +12,16 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 try:
+    import pandas as pd
+except ImportError:  # pandas is optional
+    pd = None
+
+try:
+    import pyarrow.parquet as pq
+except ImportError:  # pyarrow is optional
+    pq = None
+
+try:
     import boto3
 except ImportError:  # boto3 is optional
     boto3 = None
@@ -20,7 +30,79 @@ except ImportError:  # boto3 is optional
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "data"
 DATA_FILE = DATA_DIR / "wells.json"
+PARQUET_FILE = DATA_DIR / "ranking_flujograma_rap_iny.parquet"
 
+
+
+
+def default_checklist() -> dict[str, bool]:
+    return {
+        "productores_asociados": False,
+        "mallas_vecinas": False,
+        "historia_inyeccion": False,
+        "chequear_dp_dp": False,
+        "efectivizacion": False,
+    }
+
+
+def default_operational_checklist() -> dict[str, bool]:
+    return {
+        "estado_pozo": False,
+        "integridad_superficie": False,
+        "integridad_fondo": False,
+        "perdidas_pkrs": False,
+    }
+
+
+def build_well_from_row(row: dict[str, Any]) -> dict[str, Any]:
+    injector = str(row.get("well") or row.get("INYECTOR") or "").strip()
+    ranking = row.get("Ranking")
+    block_ranking = row.get("Ranking_Bloque")
+    field = str(row.get("Yacimiento") or "").strip()
+    block = str(row.get("Proyecto_Secundaria") or "").strip()
+
+    return {
+        "id": injector,
+        "injector": injector,
+        "ranking": int(ranking) if ranking not in (None, "") else 0,
+        "block_ranking": str(block_ranking or "-"),
+        "field": field,
+        "block": block,
+        "technical_approval": None,
+        "reason": None,
+        "checklist": default_checklist(),
+        "mandrels": [],
+        "operational_approval": None,
+        "operational_checklist": default_operational_checklist(),
+        "operational_observations": "",
+        "validated_mandrels": [],
+    }
+
+
+def load_wells_from_parquet(parquet_file: Path) -> list[dict[str, Any]]:
+    if not parquet_file.exists():
+        return []
+
+    rows: list[dict[str, Any]] = []
+    if pd is not None:
+        df = pd.read_parquet(parquet_file)
+        rows = df.to_dict(orient="records")
+    elif pq is not None:
+        table = pq.read_table(parquet_file)
+        rows = table.to_pylist()
+    else:
+        raise RuntimeError(
+            "Se encontró archivo parquet pero no hay dependencia para leerlo (instalar pandas o pyarrow)."
+        )
+
+    wells: list[dict[str, Any]] = []
+    for row in rows:
+        well = build_well_from_row(row)
+        if well["id"]:
+            wells.append(well)
+
+    unique: dict[str, dict[str, Any]] = {w["id"]: w for w in wells}
+    return list(unique.values())
 
 DUMMY_WELLS = [
     {
@@ -101,20 +183,54 @@ class WellUpdate(BaseModel):
 
 
 class Storage:
-    def __init__(self, data_file: Path) -> None:
+    def __init__(self, data_file: Path, parquet_file: Path) -> None:
         self.data_file = data_file
+        self.parquet_file = parquet_file
         self.s3_bucket = os.getenv("S3_BUCKET")
         self.s3_key = os.getenv("S3_KEY", "iwtt/wells.json")
 
+    def _load_json(self) -> list[dict[str, Any]]:
+        if not self.data_file.exists():
+            return []
+        with self.data_file.open("r", encoding="utf-8") as f:
+            return json.load(f)
+
     def _ensure_file(self) -> None:
         DATA_DIR.mkdir(exist_ok=True)
-        if not self.data_file.exists():
-            self.save(DUMMY_WELLS)
+        if self.data_file.exists():
+            return
+        parquet_wells = load_wells_from_parquet(self.parquet_file)
+        self.save(parquet_wells or DUMMY_WELLS)
+
+    def _merge_with_parquet_base(self, persisted: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        parquet_wells = load_wells_from_parquet(self.parquet_file)
+        if not parquet_wells:
+            return persisted
+
+        persisted_by_id = {w.get("id"): w for w in persisted if w.get("id")}
+        merged: list[dict[str, Any]] = []
+        for base in parquet_wells:
+            existing = persisted_by_id.get(base["id"], {})
+            merged.append({
+                **base,
+                "technical_approval": existing.get("technical_approval", base.get("technical_approval")),
+                "reason": existing.get("reason", base.get("reason")),
+                "checklist": existing.get("checklist", base.get("checklist", default_checklist())),
+                "mandrels": existing.get("mandrels", base.get("mandrels", [])),
+                "operational_approval": existing.get("operational_approval", base.get("operational_approval")),
+                "operational_checklist": existing.get("operational_checklist", base.get("operational_checklist", default_operational_checklist())),
+                "operational_observations": existing.get("operational_observations", base.get("operational_observations", "")),
+                "validated_mandrels": existing.get("validated_mandrels", base.get("validated_mandrels", [])),
+            })
+        return merged
 
     def load(self) -> list[dict[str, Any]]:
         self._ensure_file()
-        with self.data_file.open("r", encoding="utf-8") as f:
-            return json.load(f)
+        persisted = self._load_json()
+        merged = self._merge_with_parquet_base(persisted)
+        if merged != persisted:
+            self.save(merged)
+        return merged
 
     def save(self, wells: list[dict[str, Any]]) -> None:
         DATA_DIR.mkdir(exist_ok=True)
@@ -134,7 +250,7 @@ class Storage:
         )
 
 
-storage = Storage(DATA_FILE)
+storage = Storage(DATA_FILE, PARQUET_FILE)
 
 app = FastAPI(title="Gestión Oportunidades IWTT")
 app.add_middleware(
