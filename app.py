@@ -89,6 +89,10 @@ def _to_int(value: Any, default: int = 0) -> int:
         return default
 
 
+def normalize_well_id(value: Any) -> str:
+    return str(value or "").strip().upper()
+
+
 def build_well_from_row(row: dict[str, Any]) -> dict[str, Any]:
     injector = _pick(row, "well", "INYECTOR")
     ranking = _pick(row, "RANKING", "Ranking")
@@ -96,9 +100,11 @@ def build_well_from_row(row: dict[str, Any]) -> dict[str, Any]:
     field = _pick(row, "Yacimiento")
     block = _pick(row, "Proyecto_Secundaria")
 
+    normalized_id = normalize_well_id(injector)
+
     return {
-        "id": str(injector or "").strip(),
-        "injector": str(injector or "").strip(),
+        "id": normalized_id,
+        "injector": normalized_id,
         "ranking": _to_int(ranking, 0),
         "block_ranking": str(block_ranking or "-"),
         "field": str(field or "").strip(),
@@ -264,10 +270,10 @@ class Storage:
         if not parquet_wells:
             return persisted
 
-        persisted_by_id = {w.get("id"): w for w in persisted if w.get("id")}
+        persisted_by_id = {normalize_well_id(w.get("id")): w for w in persisted if w.get("id")}
         merged: list[dict[str, Any]] = []
         for base in parquet_wells:
-            existing = persisted_by_id.get(base["id"], {})
+            existing = persisted_by_id.get(normalize_well_id(base["id"]), {})
             merged.append({
                 **base,
                 "technical_approval": existing.get("technical_approval", base.get("technical_approval")),
@@ -333,7 +339,8 @@ def list_wells() -> list[dict[str, Any]]:
 @app.get("/api/wells/{well_id}")
 def get_well(well_id: str) -> dict[str, Any]:
     wells = storage.load()
-    well = next((w for w in wells if w["id"] == well_id), None)
+    requested_id = normalize_well_id(well_id)
+    well = next((w for w in wells if normalize_well_id(w.get("id")) == requested_id), None)
     if well is None:
         raise HTTPException(status_code=404, detail="Pozo no encontrado")
     return well
@@ -342,7 +349,8 @@ def get_well(well_id: str) -> dict[str, Any]:
 @app.put("/api/wells/{well_id}")
 def update_well(well_id: str, payload: WellUpdate) -> dict[str, Any]:
     wells = storage.load()
-    index = next((i for i, w in enumerate(wells) if w["id"] == well_id), None)
+    requested_id = normalize_well_id(well_id)
+    index = next((i for i, w in enumerate(wells) if normalize_well_id(w.get("id")) == requested_id), None)
     if index is None:
         raise HTTPException(status_code=404, detail="Pozo no encontrado")
 
