@@ -214,6 +214,22 @@ th {
   letter-spacing: 0.05em;
 }
 
+
+.table-sort-btn {
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
+  cursor: pointer;
+}
+
+.table-sort-btn span {
+  font-size: 12px;
+}
+
 tr:last-child td {
   border-bottom: none;
 }

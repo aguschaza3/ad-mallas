@@ -5,6 +5,11 @@ const state = {
   listPage: { cand: 1, val: 1, cro: 1 },
   saveSeq: {},
   saveTimers: {},
+  listSort: {
+    cand: { key: 'ranking', direction: 'asc' },
+    val: { key: 'ranking', direction: 'asc' },
+    cro: { key: 'ranking', direction: 'asc' },
+  },
 };
 
 const MAX_PAGE_SIZE = 25;
@@ -125,6 +130,55 @@ function filteredWells(prefix, mode = 'candidatos') {
   );
 }
 
+function statusValue(value) {
+  if (value === true) return 2;
+  if (value === false) return 1;
+  return 0;
+}
+
+function sortableValue(well, key) {
+  switch (key) {
+    case 'id':
+      return (well.id || '').toLowerCase();
+    case 'ranking':
+      return Number(well.ranking) || 0;
+    case 'block_ranking':
+      return (well.block_ranking || '').toLowerCase();
+    case 'technical_approval':
+      return statusValue(well.technical_approval);
+    case 'operational_approval':
+      return statusValue(well.operational_approval);
+    case 'reason':
+      return (well.reason || '').toLowerCase();
+    default:
+      return '';
+  }
+}
+
+function sortRows(rows, prefix) {
+  const sort = state.listSort[prefix];
+  if (!sort?.key) {
+    return rows;
+  }
+
+  const sorted = [...rows].sort((a, b) => {
+    const aValue = sortableValue(a, sort.key);
+    const bValue = sortableValue(b, sort.key);
+
+    if (aValue === bValue) {
+      return a.id.localeCompare(b.id);
+    }
+
+    if (typeof aValue === 'number' && typeof bValue === 'number') {
+      return aValue - bValue;
+    }
+
+    return String(aValue).localeCompare(String(bValue), 'es');
+  });
+
+  return sort.direction === 'desc' ? sorted.reverse() : sorted;
+}
+
 function tableRows(rows, mode = 'candidatos', rowClickable = true) {
   if (mode === 'validadas' || mode === 'cronograma') {
     return rows.map((w) => `
@@ -173,7 +227,7 @@ function currentPageSize(prefix) {
 
 function bindListEvents(prefix, mode = 'candidatos', rowClickable = true) {
   const populate = () => {
-    const allRows = filteredWells(prefix, mode);
+    const allRows = sortRows(filteredWells(prefix, mode), prefix);
     const tbody = document.getElementById(`${prefix}WellsBody`);
     const pageSize = currentPageSize(prefix);
     const totalPages = Math.max(1, Math.ceil(allRows.length / pageSize));
@@ -238,6 +292,21 @@ function bindListEvents(prefix, mode = 'candidatos', rowClickable = true) {
     populate();
   });
 
+  document.querySelectorAll(`#${prefix}WellsTable [data-sort-key]`).forEach((button) => {
+    button.addEventListener('click', () => {
+      const key = button.dataset.sortKey;
+      const current = state.listSort[prefix];
+      if (current.key === key) {
+        current.direction = current.direction === 'asc' ? 'desc' : 'asc';
+      } else {
+        current.key = key;
+        current.direction = 'asc';
+      }
+      state.listPage[prefix] = 1;
+      render();
+    });
+  });
+
   populate();
 }
 
@@ -245,6 +314,7 @@ function listLayoutTemplate(prefix, title, columns, mode = 'candidatos') {
   const source = sourceForMode(mode);
   const fields = [...new Set(source.map((w) => w.field))];
   const blocks = [...new Set(source.map((w) => w.block))];
+  const sort = state.listSort[prefix];
 
   return `
     <div class="layout-list">
@@ -263,10 +333,14 @@ function listLayoutTemplate(prefix, title, columns, mode = 'candidatos') {
         <input class="search" id="${prefix}SearchWell" placeholder="Buscar Pozo" />
         <div class="card table-block">
           <h3>${title}</h3>
-          <table>
+          <table id="${prefix}WellsTable">
             <thead>
               <tr>
-                ${columns.map((c) => `<th>${c}</th>`).join('')}
+                ${columns.map((column) => {
+                  const isActive = sort.key === column.key;
+                  const icon = isActive ? (sort.direction === 'asc' ? '↑' : '↓') : '↕';
+                  return `<th><button type="button" class="table-sort-btn" data-sort-key="${column.key}">${column.label} <span>${icon}</span></button></th>`;
+                }).join('')}
               </tr>
             </thead>
             <tbody id="${prefix}WellsBody"></tbody>
@@ -289,7 +363,7 @@ function renderCandidatosListView() {
   container.innerHTML = listLayoutTemplate(
     'cand',
     'Ranking IWTT',
-    ['Inyector', 'Ranking', 'Ranking bloque', 'Aprobación Técnica', 'Motivo'],
+    [{ label: 'Inyector', key: 'id' }, { label: 'Ranking', key: 'ranking' }, { label: 'Ranking bloque', key: 'block_ranking' }, { label: 'Aprobación Técnica', key: 'technical_approval' }, { label: 'Motivo', key: 'reason' }],
     'candidatos',
   );
   bindListEvents('cand', 'candidatos');
@@ -300,7 +374,7 @@ function renderCronogramaListView() {
   container.innerHTML = listLayoutTemplate(
     'cro',
     'Oportunidades Listas para Cronograma',
-    ['Inyector', 'Ranking', 'Aprobación Técnica (Motivo)', 'Aprobación Operativa'],
+    [{ label: 'Inyector', key: 'id' }, { label: 'Ranking', key: 'ranking' }, { label: 'Aprobación Técnica (Motivo)', key: 'technical_approval' }, { label: 'Aprobación Operativa', key: 'operational_approval' }],
     'cronograma',
   );
   bindListEvents('cro', 'cronograma', false);
@@ -425,7 +499,7 @@ function renderValidadasListView() {
   container.innerHTML = listLayoutTemplate(
     'val',
     'Oportunidades Aprobadas Técnicamente',
-    ['Inyector', 'Ranking', 'Aprobación Técnica (Motivo)', 'Aprobación Operativa'],
+    [{ label: 'Inyector', key: 'id' }, { label: 'Ranking', key: 'ranking' }, { label: 'Aprobación Técnica (Motivo)', key: 'technical_approval' }, { label: 'Aprobación Operativa', key: 'operational_approval' }],
     'validadas',
   );
   bindListEvents('val', 'validadas');

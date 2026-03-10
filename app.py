@@ -96,7 +96,7 @@ def normalize_well_id(value: Any) -> str:
 def build_well_from_row(row: dict[str, Any]) -> dict[str, Any]:
     injector = _pick(row, "well", "INYECTOR")
     ranking = _pick(row, "RANKING", "Ranking")
-    block_ranking = _pick(row, "Ranking_Bloque", "Ranking")
+    block_ranking = _pick(row, "Ranking_Bloque")
     field = _pick(row, "Yacimiento")
     block = _pick(row, "Proyecto_Secundaria")
 
