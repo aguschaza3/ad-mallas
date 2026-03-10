@@ -4,6 +4,7 @@ const state = {
   activeTab: 'candidatos',
   listPage: { cand: 1, val: 1, cro: 1 },
   saveSeq: {},
+  saveTimers: {},
 };
 
 const MAX_PAGE_SIZE = 25;
@@ -376,9 +377,11 @@ function renderCandidatoDetailView() {
 
 
   container.querySelectorAll('input[data-check]').forEach((input) => {
-    input.addEventListener('change', async () => {
+    input.addEventListener('change', () => {
       well.checklist[input.dataset.check] = input.checked;
-      await saveWell(well.id, { checklist: well.checklist });
+      scheduleWellSave(well.id, 'technical_checklist', () => ({
+        checklist: { ...well.checklist },
+      }));
     });
   });
 
@@ -402,6 +405,19 @@ function renderCandidatoDetailView() {
       await saveWell(well.id, { reason: reasonSelect.value });
     }
   });
+}
+
+
+function scheduleWellSave(id, key, payloadFactory, delayMs = 250) {
+  const timerKey = `${id}:${key}`;
+  if (state.saveTimers[timerKey]) {
+    clearTimeout(state.saveTimers[timerKey]);
+  }
+
+  state.saveTimers[timerKey] = setTimeout(async () => {
+    delete state.saveTimers[timerKey];
+    await saveWell(id, payloadFactory());
+  }, delayMs);
 }
 
 function renderValidadasListView() {
@@ -472,9 +488,11 @@ function renderValidadasDetailView() {
 
 
   container.querySelectorAll('input[data-op-check]').forEach((input) => {
-    input.addEventListener('change', async () => {
+    input.addEventListener('change', () => {
       well.operational_checklist[input.dataset.opCheck] = input.checked;
-      await saveWell(well.id, { operational_checklist: well.operational_checklist });
+      scheduleWellSave(well.id, 'operational_checklist', () => ({
+        operational_checklist: { ...well.operational_checklist },
+      }));
     });
   });
 
