@@ -54,6 +54,92 @@ def default_operational_checklist() -> dict[str, bool]:
     }
 
 
+def _clean_value(value: Any) -> Any:
+    if value is None:
+        return None
+    try:
+        if pd is not None and pd.isna(value):
+            return None
+    except Exception:
+        pass
+    if isinstance(value, str):
+        stripped = value.strip()
+        if not stripped or stripped.lower() in {"nan", "none", "null"}:
+            return None
+        return stripped
+    return value
+
+
+def _pick(row: dict[str, Any], *keys: str) -> Any:
+    for key in keys:
+        if key in row:
+            value = _clean_value(row.get(key))
+            if value is not None:
+                return value
+    return None
+
+
+def _to_int(value: Any, default: int = 0) -> int:
+    value = _clean_value(value)
+    if value is None:
+        return default
+    try:
+        return int(float(value))
+    except (TypeError, ValueError):
+        return default
+
+
+def build_well_from_row(row: dict[str, Any]) -> dict[str, Any]:
+    injector = _pick(row, "well", "INYECTOR")
+    ranking = _pick(row, "RANKING", "Ranking")
+    block_ranking = _pick(row, "Ranking", "Ranking_Bloque")
+    field = _pick(row, "Yacimiento")
+    block = _pick(row, "Proyecto_Secundaria")
+
+    return {
+        "id": str(injector or "").strip(),
+        "injector": str(injector or "").strip(),
+        "ranking": _to_int(ranking, 0),
+        "block_ranking": str(block_ranking or "-"),
+        "field": str(field or "").strip(),
+        "block": str(block or "").strip(),
+        "technical_approval": None,
+        "reason": None,
+        "checklist": default_checklist(),
+        "mandrels": [],
+        "operational_approval": None,
+        "operational_checklist": default_operational_checklist(),
+        "operational_observations": "",
+        "validated_mandrels": [],
+    }
+
+
+def load_wells_from_parquet(parquet_file: Path) -> list[dict[str, Any]]:
+    if not parquet_file.exists():
+        return []
+
+    rows: list[dict[str, Any]] = []
+    try:
+        if pd is not None:
+            df = pd.read_parquet(parquet_file)
+            rows = df.to_dict(orient="records")
+        elif pq is not None:
+            table = pq.read_table(parquet_file)
+            rows = table.to_pylist()
+        else:
+            return []
+    except Exception:
+        return []
+
+    wells: list[dict[str, Any]] = []
+    for row in rows:
+        well = build_well_from_row(row)
+        if well["id"]:
+            wells.append(well)
+
+    unique: dict[str, dict[str, Any]] = {w["id"]: w for w in wells}
+    return list(unique.values())
+
 def build_well_from_row(row: dict[str, Any]) -> dict[str, Any]:
     injector = str(row.get("well") or row.get("INYECTOR") or "").strip()
     ranking = row.get("Ranking")
@@ -228,6 +314,8 @@ class Storage:
         self._ensure_file()
         persisted = self._load_json()
         merged = self._merge_with_parquet_base(persisted)
+        if not merged:
+            merged = DUMMY_WELLS
         if merged != persisted:
             self.save(merged)
         return merged
