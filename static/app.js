@@ -212,6 +212,7 @@ function currentPageSize(prefix) {
   const title = tableBlock?.querySelector('h3');
   const footer = tableBlock?.querySelector('.table-footer');
   const thead = tableBlock?.querySelector('thead');
+  const sortHint = tableBlock?.querySelector('.sort-hint');
 
   if (!tableBlock || !title || !footer || !thead) {
     return MAX_PAGE_SIZE;
@@ -219,7 +220,8 @@ function currentPageSize(prefix) {
 
   const rowHeightVar = getComputedStyle(document.documentElement).getPropertyValue('--table-row-height');
   const rowHeight = Number.parseFloat(rowHeightVar) || 36;
-  const availableHeight = tableBlock.clientHeight - title.offsetHeight - footer.offsetHeight - thead.offsetHeight - 30;
+  const hintHeight = sortHint ? sortHint.offsetHeight : 0;
+  const availableHeight = tableBlock.clientHeight - title.offsetHeight - hintHeight - footer.offsetHeight - thead.offsetHeight - 30;
   const visibleRows = Math.floor(availableHeight / rowHeight);
 
   return Math.max(3, Math.min(MAX_PAGE_SIZE, visibleRows));
@@ -333,7 +335,6 @@ function listLayoutTemplate(prefix, title, columns, mode = 'candidatos') {
         <input class="search" id="${prefix}SearchWell" placeholder="Buscar Pozo" />
         <div class="card table-block">
           <h3>${title}</h3>
-          <p class="sort-hint">Click en el encabezado de cada columna para ordenar.</p>
           <table id="${prefix}WellsTable">
             <thead>
               <tr>
