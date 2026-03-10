@@ -627,7 +627,7 @@ async function saveWell(id, payload) {
       return;
     }
     alert(err.message);
-    await loadWells();
+    render();
   }
 }
 
