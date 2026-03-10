@@ -140,56 +140,6 @@ def load_wells_from_parquet(parquet_file: Path) -> list[dict[str, Any]]:
     unique: dict[str, dict[str, Any]] = {w["id"]: w for w in wells}
     return list(unique.values())
 
-def build_well_from_row(row: dict[str, Any]) -> dict[str, Any]:
-    injector = str(row.get("well") or row.get("INYECTOR") or "").strip()
-    ranking = row.get("Ranking")
-    block_ranking = row.get("Ranking_Bloque")
-    field = str(row.get("Yacimiento") or "").strip()
-    block = str(row.get("Proyecto_Secundaria") or "").strip()
-
-    return {
-        "id": injector,
-        "injector": injector,
-        "ranking": int(ranking) if ranking not in (None, "") else 0,
-        "block_ranking": str(block_ranking or "-"),
-        "field": field,
-        "block": block,
-        "technical_approval": None,
-        "reason": None,
-        "checklist": default_checklist(),
-        "mandrels": [],
-        "operational_approval": None,
-        "operational_checklist": default_operational_checklist(),
-        "operational_observations": "",
-        "validated_mandrels": [],
-    }
-
-
-def load_wells_from_parquet(parquet_file: Path) -> list[dict[str, Any]]:
-    if not parquet_file.exists():
-        return []
-
-    rows: list[dict[str, Any]] = []
-    if pd is not None:
-        df = pd.read_parquet(parquet_file)
-        rows = df.to_dict(orient="records")
-    elif pq is not None:
-        table = pq.read_table(parquet_file)
-        rows = table.to_pylist()
-    else:
-        raise RuntimeError(
-            "Se encontró archivo parquet pero no hay dependencia para leerlo (instalar pandas o pyarrow)."
-        )
-
-    wells: list[dict[str, Any]] = []
-    for row in rows:
-        well = build_well_from_row(row)
-        if well["id"]:
-            wells.append(well)
-
-    unique: dict[str, dict[str, Any]] = {w["id"]: w for w in wells}
-    return list(unique.values())
-
 DUMMY_WELLS = [
     {
         "id": "POZO-101",
@@ -285,11 +235,17 @@ class Storage:
         DATA_DIR.mkdir(exist_ok=True)
         if self.data_file.exists():
             return
-        parquet_wells = load_wells_from_parquet(self.parquet_file)
+        try:
+            parquet_wells = load_wells_from_parquet(self.parquet_file)
+        except Exception:
+            parquet_wells = []
         self.save(parquet_wells or DUMMY_WELLS)
 
     def _merge_with_parquet_base(self, persisted: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        parquet_wells = load_wells_from_parquet(self.parquet_file)
+        try:
+            parquet_wells = load_wells_from_parquet(self.parquet_file)
+        except Exception:
+            parquet_wells = []
         if not parquet_wells:
             return persisted
 
