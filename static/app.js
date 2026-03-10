@@ -339,7 +339,8 @@ function listLayoutTemplate(prefix, title, columns, mode = 'candidatos') {
                 ${columns.map((column) => {
                   const isActive = sort.key === column.key;
                   const icon = isActive ? (sort.direction === 'asc' ? '↑' : '↓') : '↕';
-                  return `<th><button type="button" class="table-sort-btn" data-sort-key="${column.key}">${column.label} <span>${icon}</span></button></th>`;
+                  const activeClass = isActive ? 'is-active' : '';
+                  return `<th><button type="button" class="table-sort-btn ${activeClass}" data-sort-key="${column.key}" title="Ordenar por ${column.label}">${column.label} <span aria-hidden="true">${icon}</span></button></th>`;
                 }).join('')}
               </tr>
             </thead>

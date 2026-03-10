@@ -224,6 +224,21 @@ th {
   text-transform: inherit;
   letter-spacing: inherit;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 4px 0;
+  border-radius: 6px;
+}
+
+.table-sort-btn:hover {
+  background: rgba(79, 110, 135, 0.15);
+}
+
+.table-sort-btn.is-active {
+  color: #183b5a;
+  font-weight: 700;
 }
 
 .table-sort-btn span {
